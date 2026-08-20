@@ -202,3 +202,46 @@ export async function getUserTheses(userId: string): Promise<ThesisWithRelations
 
   return flattenTags((data ?? []) as unknown as ThesisJoinRow[])
 }
+
+// ── Single thesis ─────────────────────────────────────────────────────────────
+
+export async function getThesisById(id: string): Promise<ThesisWithRelations | null> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('theses')
+    .select(`*, college:colleges(*), program:programs(*), tags:thesis_tags(tag:tags(*))`)
+    .eq('id', id)
+    .single()
+
+  if (error || !data) return null
+  return flattenTags([data as unknown as ThesisJoinRow])[0] ?? null
+}
+
+// ── User profile stats ────────────────────────────────────────────────────────
+
+export interface UserStats {
+  thesisCount: number
+  totalViews: number
+  avgScore: number | null
+}
+
+export async function getUserStats(userId: string): Promise<UserStats> {
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from('theses')
+    .select('view_count, panel_score')
+    .eq('uploaded_by', userId)
+
+  if (!data || data.length === 0) {
+    return { thesisCount: 0, totalViews: 0, avgScore: null }
+  }
+
+  const rows = data as { view_count: number; panel_score: number | null }[]
+  const totalViews = rows.reduce((sum, r) => sum + (r.view_count ?? 0), 0)
+  const scored = rows.filter(r => r.panel_score != null)
+  const avgScore = scored.length > 0
+    ? scored.reduce((sum, r) => sum + r.panel_score!, 0) / scored.length
+    : null
+
+  return { thesisCount: data.length, totalViews, avgScore }
+}

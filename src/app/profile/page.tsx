@@ -1,0 +1,113 @@
+import type { Metadata } from 'next'
+import { redirect } from 'next/navigation'
+import Link from 'next/link'
+import { Suspense } from 'react'
+import { createClient } from '@/lib/supabase/server'
+import { getUserTheses, getUserStats } from '@/lib/data'
+import ThesisCard from '@/components/ThesisCard'
+import UpdateNameForm from '@/components/UpdateNameForm'
+
+export const metadata: Metadata = {
+  title: 'My Profile',
+  description: 'Your thesis uploads and account settings.',
+}
+
+export default async function ProfilePage() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login?redirectTo=/profile')
+
+  const displayName: string =
+    (user.user_metadata?.full_name as string | undefined) ||
+    user.email?.split('@')[0] ||
+    'User'
+
+  const [theses, stats] = await Promise.all([
+    getUserTheses(user.id),
+    getUserStats(user.id),
+  ])
+
+  return (
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-10">
+
+      {/* Profile header */}
+      <div className="card p-6 sm:p-8 space-y-6">
+        <div className="flex items-start justify-between flex-wrap gap-4">
+          <div>
+            <p className="text-sm text-slate-400 mb-0.5">Signed in as</p>
+            <h1 className="text-2xl font-bold text-slate-900">{displayName}</h1>
+            <p className="text-sm text-slate-500 mt-0.5">{user.email}</p>
+          </div>
+
+          {/* Stats */}
+          <div className="flex gap-6 text-center">
+            <div>
+              <p className="text-2xl font-bold text-slate-800">{stats.thesisCount}</p>
+              <p className="text-xs text-slate-400 mt-0.5">
+                {stats.thesisCount === 1 ? 'Thesis' : 'Theses'}
+              </p>
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-slate-800">{stats.totalViews.toLocaleString()}</p>
+              <p className="text-xs text-slate-400 mt-0.5">Total views</p>
+            </div>
+            {stats.avgScore != null && (
+              <div>
+                <p className="text-2xl font-bold text-sky-600">{stats.avgScore.toFixed(1)}</p>
+                <p className="text-xs text-slate-400 mt-0.5">Avg. score</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Update display name */}
+        <div className="border-t border-slate-100 pt-5">
+          <p className="text-sm font-medium text-slate-700 mb-3">Display name</p>
+          <Suspense>
+            <UpdateNameForm currentName={displayName} />
+          </Suspense>
+        </div>
+      </div>
+
+      {/* Upload CTA */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-bold text-slate-800">My Theses</h2>
+          {theses.length > 0 && (
+            <p className="text-sm text-slate-400 mt-0.5">{theses.length} uploaded</p>
+          )}
+        </div>
+        <Link href="/theses/upload" className="btn btn-primary btn-sm">
+          + Upload thesis
+        </Link>
+      </div>
+
+      {/* Thesis grid */}
+      {theses.length === 0 ? (
+        <div className="card p-10 text-center space-y-3">
+          <p className="text-slate-400 text-lg">No theses uploaded yet.</p>
+          <Link href="/theses/upload" className="btn btn-primary">
+            Upload your first thesis
+          </Link>
+        </div>
+      ) : (
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {theses.map(thesis => (
+            <div key={thesis.id} className="relative group">
+              <ThesisCard thesis={thesis} />
+              {/* Overlay edit/delete controls */}
+              <div className="absolute bottom-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <Link
+                  href={`/theses/${thesis.id}/edit`}
+                  className="btn btn-sm bg-white border-slate-200 text-slate-700 hover:border-sky-400 hover:text-sky-600 shadow-sm text-xs"
+                >
+                  Edit
+                </Link>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}

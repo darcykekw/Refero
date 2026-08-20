@@ -115,3 +115,28 @@ export async function resetPassword(
 
   redirect('/login?reset=success')
 }
+
+// ── Update Display Name ────────────────────────────────────────────────────────
+
+export async function updateDisplayName(
+  _prevState: AuthState,
+  formData: FormData
+): Promise<AuthState> {
+  const fullName = (formData.get('full_name') as string)?.trim()
+  if (!fullName || fullName.length < 2) {
+    return { error: 'Please enter a valid name (at least 2 characters).' }
+  }
+
+  const supabase = await createClient()
+  const { error } = await supabase.auth.updateUser({
+    data: { full_name: fullName },
+  })
+
+  if (error) return { error: error.message }
+
+  const { revalidatePath } = await import('next/cache')
+  revalidatePath('/profile')
+
+  return { message: 'Display name updated.' }
+}
+
