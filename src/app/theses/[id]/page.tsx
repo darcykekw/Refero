@@ -1,11 +1,11 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/server'
-import { createAdminClient } from '@/lib/supabase/admin'
-import { getThesisById } from '@/lib/data'
-import { getThesisRecommendations } from '@/lib/semantic-scholar'
-import type { SSPaper } from '@/lib/semantic-scholar'
+import { Suspense } from 'react'
+import { getCurrentUser } from '@/lib/auth'
+import { getThesisById, incrementThesisViews } from '@/lib/data'
+import { getThesisPdfUrl } from '@/lib/storage'
+import { getThesisRecommendations, type SSPaper } from '@/lib/semantic-scholar'
 
 interface PageProps {
   params: Promise<{ id: string }>
@@ -13,11 +13,14 @@ interface PageProps {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { id } = await params
+  // getThesisById is request-cached, so this shares one query with the page below.
   const thesis = await getThesisById(id)
   if (!thesis) return { title: 'Thesis Not Found' }
   return {
     title: thesis.title,
-    description: thesis.abstract.slice(0, 155) + '…',
+    description: thesis.abstract.length > 155
+      ? thesis.abstract.slice(0, 155).trimEnd() + '…'
+      : thesis.abstract,
   }
 }
 
@@ -26,31 +29,17 @@ export default async function ThesisDetailPage({ params }: PageProps) {
   const thesis = await getThesisById(id)
   if (!thesis) notFound()
 
-  // Increment view count (service role bypasses RLS)
-  const admin = createAdminClient()
-  await admin
-    .from('theses')
-    .update({ view_count: thesis.view_count + 1 })
-    .eq('id', id)
-
-  // Current user (for edit/delete buttons)
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  // Current user (for edit/delete buttons), the atomic view bump, and a
+  // time-limited PDF link — all independent, so run them together.
+  const [user, viewCount, pdfUrl] = await Promise.all([
+    getCurrentUser(),
+    incrementThesisViews(id),
+    getThesisPdfUrl(thesis.pdf_file),
+  ])
   const isOwner = user?.id === thesis.uploaded_by
 
-  // Public PDF URL
-  const { data: { publicUrl } } = admin.storage
-    .from('thesis-pdfs')
-    .getPublicUrl(thesis.pdf_file)
-
-  // Semantic Scholar recommendations (non-blocking)
-  let recommendations: SSPaper[] = []
-  try {
-    recommendations = await getThesisRecommendations(thesis.title, thesis.ss_paper_id)
-  } catch { /* graceful fallback */ }
-
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-8">
+    <div className="max-w-5xl page-gutter py-10 space-y-8">
 
       {/* Breadcrumb */}
       <nav className="flex items-center gap-2 text-sm text-slate-400">
@@ -85,7 +74,7 @@ export default async function ThesisDetailPage({ params }: PageProps) {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
             </svg>
-            {(thesis.view_count + 1).toLocaleString()} views
+            {(viewCount ?? thesis.view_count).toLocaleString()} views
           </span>
         </div>
 
@@ -121,58 +110,108 @@ export default async function ThesisDetailPage({ params }: PageProps) {
         <section className="card p-6 sm:p-8 space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-slate-800">Full Document</h2>
-            <a
-              href={publicUrl}
-              download
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn btn-primary btn-sm"
-            >
-              Download PDF
-            </a>
-          </div>
-          <iframe
-            src={publicUrl}
-            title={`PDF: ${thesis.title}`}
-            className="w-full rounded-xl border border-slate-200"
-            style={{ height: '70vh' }}
-          />
-        </section>
-      )}
-
-      {/* Semantic Scholar recommendations */}
-      {recommendations.length > 0 && (
-        <section>
-          <div className="flex items-center gap-2 mb-4">
-            <div className="h-5 w-1 rounded-full bg-sky-600" />
-            <h2 className="text-xl font-bold text-slate-800">Related Papers</h2>
-            <span className="text-xs text-slate-400 ml-1">via Semantic Scholar</span>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {recommendations.map(paper => (
+            {pdfUrl && (
               <a
-                key={paper.paperId}
-                href={`https://www.semanticscholar.org/paper/${paper.paperId}`}
+                href={pdfUrl}
+                download
                 target="_blank"
                 rel="noopener noreferrer"
-                className="card card-hover p-4 space-y-2 block"
+                className="btn btn-primary btn-sm"
               >
-                <p className="font-semibold text-sm text-slate-800 leading-snug line-clamp-2">
-                  {paper.title}
-                </p>
-                <p className="text-xs text-slate-400">
-                  {paper.authors.map(a => a.name).join(', ')}
-                  {paper.year ? ` · ${paper.year}` : ''}
-                </p>
-                {paper.abstract && (
-                  <p className="text-xs text-slate-500 line-clamp-3">{paper.abstract}</p>
-                )}
+                Download PDF
               </a>
-            ))}
+            )}
           </div>
+          {pdfUrl ? (
+            <iframe
+              src={pdfUrl}
+              title={`PDF: ${thesis.title}`}
+              className="w-full rounded-xl border border-slate-200"
+              style={{ height: '70vh' }}
+            />
+          ) : (
+            <p className="text-sm text-slate-500">
+              This PDF is temporarily unavailable. Please try again in a moment.
+            </p>
+          )}
         </section>
       )}
 
+      {/* Semantic Scholar recommendations.
+          Behind a Suspense boundary because fetching them means one or two
+          round-trips to an external API. Awaiting it inline — as this page used
+          to, despite a comment claiming otherwise — held the entire thesis back
+          until Semantic Scholar answered. */}
+      <Suspense fallback={<RelatedPapersSkeleton />}>
+        <RelatedPapers title={thesis.title} ssPaperId={thesis.ss_paper_id} />
+      </Suspense>
+
     </div>
+  )
+}
+
+// ── Related papers ────────────────────────────────────────────────────────────
+
+async function RelatedPapers({
+  title,
+  ssPaperId,
+}: {
+  title: string
+  ssPaperId: string | null
+}) {
+  let recommendations: SSPaper[] = []
+  try {
+    recommendations = await getThesisRecommendations(title, ssPaperId)
+  } catch { /* graceful fallback — the section just doesn't render */ }
+
+  if (recommendations.length === 0) return null
+
+  return (
+    <section>
+      <div className="flex items-center gap-2 mb-4">
+        <div className="h-5 w-1 rounded-full bg-sky-600" />
+        <h2 className="text-xl font-bold text-slate-800">Related Papers</h2>
+        <span className="text-xs text-slate-400 ml-1">via Semantic Scholar</span>
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {recommendations.map(paper => (
+          <a
+            key={paper.paperId}
+            href={`https://www.semanticscholar.org/paper/${paper.paperId}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="card card-hover p-4 space-y-2 block"
+          >
+            <p className="font-semibold text-sm text-slate-800 leading-snug line-clamp-2">
+              {paper.title}
+            </p>
+            <p className="text-xs text-slate-400">
+              {paper.authors.map(a => a.name).join(', ')}
+              {paper.year ? ` · ${paper.year}` : ''}
+            </p>
+            {paper.abstract && (
+              <p className="text-xs text-slate-500 line-clamp-3">{paper.abstract}</p>
+            )}
+          </a>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function RelatedPapersSkeleton() {
+  return (
+    <section aria-hidden="true">
+      <div className="h-6 w-40 rounded skeleton mb-4" />
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {[0, 1, 2].map(i => (
+          <div key={i} className="card p-4 space-y-2">
+            <div className="h-4 w-full rounded skeleton" />
+            <div className="h-3 w-2/3 rounded skeleton" />
+            <div className="h-3 w-full rounded skeleton" />
+          </div>
+        ))}
+      </div>
+    </section>
   )
 }

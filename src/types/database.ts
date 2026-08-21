@@ -1,18 +1,16 @@
 /**
  * Supabase Database Type Definitions
  *
- * These are hand-written to match 001_init_schema.sql.
+ * These are hand-written to match the SQL migrations in supabase/migrations/.
  * You can replace this file with auto-generated types by running:
  *   npx supabase gen types typescript --project-id YOUR_PROJECT_ID > src/types/database.ts
+ *
+ * Every table carries a `Relationships` array, and it is not decoration:
+ * supabase-js only accepts this type as a schema if each table matches its
+ * `GenericTable` shape, which requires that key. Without it the client silently
+ * resolved the whole schema to `never`, which is why `.rpc()` calls reported
+ * their arguments as `undefined` and inserts had to be cast through `as never`.
  */
-
-export type Json =
-  | string
-  | number
-  | boolean
-  | null
-  | { [key: string]: Json | undefined }
-  | Json[]
 
 export interface Database {
   public: {
@@ -36,6 +34,7 @@ export interface Database {
           date_added?: string
           date_modified?: string
         }
+        Relationships: []
       }
       programs: {
         Row: {
@@ -62,6 +61,15 @@ export interface Database {
           date_added?: string
           date_modified?: string
         }
+        Relationships: [
+          {
+            foreignKeyName: 'programs_college_id_fkey'
+            columns: ['college_id']
+            isOneToOne: false
+            referencedRelation: 'colleges'
+            referencedColumns: ['id']
+          },
+        ]
       }
       tags: {
         Row: {
@@ -82,6 +90,7 @@ export interface Database {
           date_added?: string
           date_modified?: string
         }
+        Relationships: []
       }
       theses: {
         Row: {
@@ -135,6 +144,22 @@ export interface Database {
           date_added?: string
           date_modified?: string
         }
+        Relationships: [
+          {
+            foreignKeyName: 'theses_college_id_fkey'
+            columns: ['college_id']
+            isOneToOne: false
+            referencedRelation: 'colleges'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'theses_program_id_fkey'
+            columns: ['program_id']
+            isOneToOne: false
+            referencedRelation: 'programs'
+            referencedColumns: ['id']
+          },
+        ]
       }
       thesis_tags: {
         Row: {
@@ -149,20 +174,49 @@ export interface Database {
           thesis_id?: string
           tag_id?: string
         }
+        Relationships: [
+          {
+            foreignKeyName: 'thesis_tags_thesis_id_fkey'
+            columns: ['thesis_id']
+            isOneToOne: false
+            referencedRelation: 'theses'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'thesis_tags_tag_id_fkey'
+            columns: ['tag_id']
+            isOneToOne: false
+            referencedRelation: 'tags'
+            referencedColumns: ['id']
+          },
+        ]
       }
     }
     Views: Record<string, never>
-    Functions: Record<string, never>
+    Functions: {
+      /** Atomically bumps view_count and returns the new total. */
+      increment_thesis_views: {
+        Args: { thesis_uuid: string }
+        Returns: number
+      }
+      /** Thesis IDs carrying every one of the given tags. */
+      theses_with_all_tags: {
+        Args: { tag_ids: string[] }
+        Returns: { thesis_id: string }[]
+      }
+    }
     Enums: Record<string, never>
+    CompositeTypes: Record<string, never>
   }
 }
 
 // ── Convenience aliases ──────────────────────────────────────────────────────
-export type College   = Database['public']['Tables']['colleges']['Row']
-export type Program   = Database['public']['Tables']['programs']['Row']
-export type Tag       = Database['public']['Tables']['tags']['Row']
-export type Thesis    = Database['public']['Tables']['theses']['Row']
-export type ThesisTag = Database['public']['Tables']['thesis_tags']['Row']
+// No alias for thesis_tags: nothing consumes the junction row on its own, because
+// every read reaches tags through the nested select in lib/data.ts.
+export type College = Database['public']['Tables']['colleges']['Row']
+export type Program = Database['public']['Tables']['programs']['Row']
+export type Tag     = Database['public']['Tables']['tags']['Row']
+export type Thesis  = Database['public']['Tables']['theses']['Row']
 
 /** Thesis with its related college, program, and tags joined */
 export interface ThesisWithRelations extends Thesis {

@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { Suspense } from 'react'
-import { createClient } from '@/lib/supabase/server'
+import { getCurrentUser } from '@/lib/auth'
 import { getSiteStats, getFeaturedTheses, getAllPrograms } from '@/lib/data'
 import ThesisCard from '@/components/ThesisCard'
 import ProgramCarousel from '@/components/ProgramCarousel'
@@ -19,18 +19,18 @@ interface HomePageProps {
 export default async function HomePage({ searchParams }: HomePageProps) {
   const { program: programId } = await searchParams
 
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-
-  const displayName = user?.user_metadata?.full_name
-    ?? user?.email?.split('@')[0]
-    ?? 'Researcher'
-
-  const [stats, programs, featured] = await Promise.all([
+  // The stats, program list and featured theses do not depend on who is asking,
+  // so they load alongside the user lookup rather than after it.
+  const [user, stats, programs, featured] = await Promise.all([
+    getCurrentUser(),
     getSiteStats(),
     getAllPrograms(),
     getFeaturedTheses(programId),
   ])
+
+  const displayName = user?.user_metadata?.full_name
+    ?? user?.email?.split('@')[0]
+    ?? 'Researcher'
 
   const STATS = [
     { label: 'Theses',   value: stats.thesis_count,  icon: '📄' },
@@ -40,7 +40,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   ]
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-14">
+    <div className="max-w-7xl page-gutter py-10 space-y-14">
 
       {/* ── Hero banner ───────────────────────────────────────────────── */}
       <header className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-sky-600 to-blue-700 text-white shadow-xl shadow-sky-900/10 isolate">

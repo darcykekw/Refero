@@ -1,9 +1,22 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
+/** Route trees that require a signed-in user. `/` is handled separately. */
+const PROTECTED_ROOTS = ['/theses', '/profile']
+
+/** Pages that make no sense to a user who is already signed in. */
+const AUTH_PAGES = ['/login', '/register']
+
+function isProtectedPath(pathname: string): boolean {
+  if (pathname === '/') return true
+  return PROTECTED_ROOTS.some(
+    root => pathname === root || pathname.startsWith(`${root}/`)
+  )
+}
+
 /**
  * Refreshes the Supabase auth session on every request.
- * Must be called from middleware.ts to keep the session alive.
+ * Must be called from proxy.ts to keep the session alive.
  */
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
@@ -34,26 +47,27 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
-  // Protected routes: redirect unauthenticated users to /login
-  const protectedPaths = ['/', '/theses', '/profile']
-  const isProtected = protectedPaths.some(
-    (path) =>
-      request.nextUrl.pathname === path ||
-      request.nextUrl.pathname.startsWith('/theses/')
-  )
+  const { pathname, search, searchParams } = request.nextUrl
 
-  if (isProtected && !user) {
+  // Protected routes: redirect unauthenticated users to /login
+  if (isProtectedPath(pathname) && !user) {
     const loginUrl = request.nextUrl.clone()
     loginUrl.pathname = '/login'
-    loginUrl.searchParams.set('redirectTo', request.nextUrl.pathname)
+    loginUrl.search = ''
+    // Path *and* query, so signing in returns the visitor to the exact page
+    // they asked for — page 3 of a filtered list, not the bare list.
+    loginUrl.searchParams.set('redirectTo', `${pathname}${search}`)
     return NextResponse.redirect(loginUrl)
   }
 
-  // If already logged in, don't show auth pages
-  const authPaths = ['/login', '/register']
-  if (authPaths.includes(request.nextUrl.pathname) && user) {
+  // If already logged in, don't show auth pages. `?reset=success` is exempt: a
+  // password reset lands on /login while the old session cookie may still be
+  // present, and bouncing it to / hid the confirmation notice entirely.
+  const isResetNotice = pathname === '/login' && searchParams.get('reset') === 'success'
+  if (AUTH_PAGES.includes(pathname) && user && !isResetNotice) {
     const homeUrl = request.nextUrl.clone()
     homeUrl.pathname = '/'
+    homeUrl.search = ''
     return NextResponse.redirect(homeUrl)
   }
 

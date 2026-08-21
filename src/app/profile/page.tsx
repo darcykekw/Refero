@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { Suspense } from 'react'
-import { createClient } from '@/lib/supabase/server'
+import { getCurrentUser } from '@/lib/auth'
 import { getUserTheses, getUserStats } from '@/lib/data'
 import ThesisCard from '@/components/ThesisCard'
 import UpdateNameForm from '@/components/UpdateNameForm'
@@ -13,8 +13,7 @@ export const metadata: Metadata = {
 }
 
 export default async function ProfilePage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getCurrentUser()
   if (!user) redirect('/login?redirectTo=/profile')
 
   const displayName: string =
@@ -28,7 +27,7 @@ export default async function ProfilePage() {
   ])
 
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-10">
+    <div className="max-w-5xl page-gutter py-10 space-y-10">
 
       {/* Profile header */}
       <div className="card p-6 sm:p-8 space-y-6">

@@ -1,11 +1,11 @@
 'use client'
 
-import { useActionState } from 'react'
+import { useActionState, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { Suspense } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { signIn } from '@/app/actions/auth'
+import AuthCardSkeleton from '@/components/AuthCardSkeleton'
 
 const initialState = { error: undefined, message: undefined }
 
@@ -132,14 +132,7 @@ function LoginForm() {
 // Suspense boundary required for useSearchParams() in static builds
 export default function LoginPage() {
   return (
-    <Suspense fallback={
-      <div className="card p-8 shadow-lg animate-pulse">
-        <div className="h-8 bg-slate-100 rounded mb-4 w-48" />
-        <div className="h-4 bg-slate-100 rounded mb-6 w-64" />
-        <div className="h-12 bg-slate-100 rounded mb-4" />
-        <div className="h-12 bg-slate-100 rounded" />
-      </div>
-    }>
+    <Suspense fallback={<AuthCardSkeleton />}>
       <LoginForm />
     </Suspense>
   )

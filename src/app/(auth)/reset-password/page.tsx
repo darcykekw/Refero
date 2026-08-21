@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { resetPassword } from '@/app/actions/auth'
+import AuthCardSkeleton from '@/components/AuthCardSkeleton'
 
 const initialState = { error: undefined, message: undefined }
 
@@ -98,14 +99,7 @@ function ResetPasswordForm() {
 
 export default function ResetPasswordPage() {
   return (
-    <Suspense fallback={
-      <div className="card p-8 shadow-lg animate-pulse">
-        <div className="h-8 bg-slate-100 rounded mb-4 w-56" />
-        <div className="h-4 bg-slate-100 rounded mb-6 w-48" />
-        <div className="h-12 bg-slate-100 rounded mb-4" />
-        <div className="h-12 bg-slate-100 rounded" />
-      </div>
-    }>
+    <Suspense fallback={<AuthCardSkeleton />}>
       <ResetPasswordForm />
     </Suspense>
   )

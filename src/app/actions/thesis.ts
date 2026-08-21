@@ -4,32 +4,42 @@ import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { THESIS_PDF_BUCKET } from '@/lib/storage'
 import { getPaperId } from '@/lib/semantic-scholar'
 
 export interface ThesisActionState {
   error?: string
 }
 
-// ── Type helpers ──────────────────────────────────────────────────────────────
-
-/** Cast used to bypass Supabase SSR client's column-string inference failures. */
-type DbResult<T> = Promise<{ data: T | null; error: { message: string } | null }>
-
 // ── Shared helpers ────────────────────────────────────────────────────────────
 
+/**
+ * Reads a form field as a string.
+ *
+ * `formData.get()` returns `string | File | null`. Casting straight to `string`
+ * and calling `.trim()` throws a TypeError on a missing or non-text field rather
+ * than falling through to validation, so every read goes through here.
+ */
+function text(formData: FormData, name: string): string {
+  const value = formData.get(name)
+  return typeof value === 'string' ? value.trim() : ''
+}
+
 function parseFormFields(formData: FormData) {
+  const pdf = formData.get('pdf_file')
+
   return {
-    title:         (formData.get('title')          as string)?.trim() ?? '',
-    abstract:      (formData.get('abstract')       as string)?.trim() ?? '',
-    authors:       (formData.get('authors')        as string)?.trim() ?? '',
-    adviser:       (formData.get('adviser')        as string)?.trim() || null,
-    yearStr:       (formData.get('year_submitted') as string) ?? '',
-    collegeId:     (formData.get('college_id')     as string) ?? '',
-    programId:     (formData.get('program_id')     as string) ?? '',
-    panelScoreStr: (formData.get('panel_score')    as string) ?? '',
-    tagIds:         formData.getAll('tag_ids')  as string[],
-    newTagsStr:    (formData.get('new_tags')       as string)?.trim() ?? '',
-    pdfFile:        formData.get('pdf_file')   as File | null,
+    title:         text(formData, 'title'),
+    abstract:      text(formData, 'abstract'),
+    authors:       text(formData, 'authors'),
+    adviser:       text(formData, 'adviser') || null,
+    yearStr:       text(formData, 'year_submitted'),
+    collegeId:     text(formData, 'college_id'),
+    programId:     text(formData, 'program_id'),
+    panelScoreStr: text(formData, 'panel_score'),
+    tagIds:        formData.getAll('tag_ids').filter((v): v is string => typeof v === 'string'),
+    newTagsStr:    text(formData, 'new_tags'),
+    pdfFile:       pdf instanceof File ? pdf : null,
   }
 }
 
@@ -68,7 +78,7 @@ async function uploadPdf(
   const admin = createAdminClient()
   const path = `${userId}/${Date.now()}.pdf`
   const { error } = await admin.storage
-    .from('thesis-pdfs')
+    .from(THESIS_PDF_BUCKET)
     .upload(path, file, { contentType: 'application/pdf', upsert: false })
   if (error) {
     console.error('Storage upload error:', error)
@@ -95,14 +105,14 @@ async function syncTags(
         .maybeSingle()
 
       if (existing) {
-        allTagIds.push((existing as { id: string }).id)
+        allTagIds.push(existing.id)
       } else {
         const { data: created } = await admin
           .from('tags')
           .insert({ name })
           .select('id')
           .single()
-        if (created) allTagIds.push((created as { id: string }).id)
+        if (created) allTagIds.push(created.id)
       }
     }
   }
@@ -133,29 +143,28 @@ export async function uploadThesis(
   const uploadResult = await uploadPdf(user.id, fields.pdfFile!)
   if ('error' in uploadResult) return { error: uploadResult.error }
 
-  // Insert thesis — cast insert values as `never` to bypass SSR client type inference bug
-  const { data: thesis, error: insertError } = await (
-    supabase
-      .from('theses')
-      .insert({
-        title:          fields.title,
-        abstract:       fields.abstract,
-        authors:        fields.authors,
-        adviser:        fields.adviser,
-        year_submitted: parseInt(fields.yearStr, 10),
-        college_id:     fields.collegeId,
-        program_id:     fields.programId,
-        panel_score:    fields.panelScoreStr ? parseFloat(fields.panelScoreStr) : null,
-        pdf_file:       uploadResult.path,
-        uploaded_by:    user.id,
-        view_count:     0,
-      } as never)
-      .select('id')
-      .single() as unknown as DbResult<{ id: string }>
-  )
+  // Insert the thesis. The schema type now resolves properly, so these values
+  // are checked against the `theses` Insert type rather than cast to `never`.
+  const { data: thesis, error: insertError } = await supabase
+    .from('theses')
+    .insert({
+      title:          fields.title,
+      abstract:       fields.abstract,
+      authors:        fields.authors,
+      adviser:        fields.adviser,
+      year_submitted: parseInt(fields.yearStr, 10),
+      college_id:     fields.collegeId,
+      program_id:     fields.programId,
+      panel_score:    fields.panelScoreStr ? parseFloat(fields.panelScoreStr) : null,
+      pdf_file:       uploadResult.path,
+      uploaded_by:    user.id,
+      view_count:     0,
+    })
+    .select('id')
+    .single()
 
   if (insertError || !thesis) {
-    await createAdminClient().storage.from('thesis-pdfs').remove([uploadResult.path])
+    await createAdminClient().storage.from(THESIS_PDF_BUCKET).remove([uploadResult.path])
     console.error('Thesis insert error:', insertError)
     return { error: 'Failed to save thesis. Please try again.' }
   }
@@ -184,17 +193,14 @@ export async function updateThesis(
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'You must be signed in.' }
 
-  const thesisId = (formData.get('thesis_id') as string)?.trim()
+  const thesisId = text(formData, 'thesis_id')
   if (!thesisId) return { error: 'Invalid thesis.' }
 
-  type OwnerRow = { id: string; uploaded_by: string; pdf_file: string }
-  const { data: existing } = await (
-    supabase
-      .from('theses')
-      .select('id, uploaded_by, pdf_file')
-      .eq('id', thesisId)
-      .single() as unknown as DbResult<OwnerRow>
-  )
+  const { data: existing } = await supabase
+    .from('theses')
+    .select('id, uploaded_by, pdf_file')
+    .eq('id', thesisId)
+    .single()
 
   if (!existing) return { error: 'Thesis not found.' }
   if (existing.uploaded_by !== user.id) return { error: 'You do not have permission to edit this thesis.' }
@@ -208,26 +214,24 @@ export async function updateThesis(
     if (fields.pdfFile.size > 20 * 1024 * 1024) return { error: 'PDF file must be under 20 MB.' }
     const uploadResult = await uploadPdf(user.id, fields.pdfFile)
     if ('error' in uploadResult) return { error: uploadResult.error }
-    await createAdminClient().storage.from('thesis-pdfs').remove([existing.pdf_file])
+    await createAdminClient().storage.from(THESIS_PDF_BUCKET).remove([existing.pdf_file])
     pdfPath = uploadResult.path
   }
 
-  const { error: updateError } = await (
-    supabase
-      .from('theses')
-      .update({
-        title:          fields.title,
-        abstract:       fields.abstract,
-        authors:        fields.authors,
-        adviser:        fields.adviser,
-        year_submitted: parseInt(fields.yearStr, 10),
-        college_id:     fields.collegeId,
-        program_id:     fields.programId,
-        panel_score:    fields.panelScoreStr ? parseFloat(fields.panelScoreStr) : null,
-        pdf_file:       pdfPath,
-      } as never)
-      .eq('id', thesisId) as unknown as DbResult<null>
-  )
+  const { error: updateError } = await supabase
+    .from('theses')
+    .update({
+      title:          fields.title,
+      abstract:       fields.abstract,
+      authors:        fields.authors,
+      adviser:        fields.adviser,
+      year_submitted: parseInt(fields.yearStr, 10),
+      college_id:     fields.collegeId,
+      program_id:     fields.programId,
+      panel_score:    fields.panelScoreStr ? parseFloat(fields.panelScoreStr) : null,
+      pdf_file:       pdfPath,
+    })
+    .eq('id', thesisId)
 
   if (updateError) {
     console.error('Thesis update error:', updateError)
@@ -244,19 +248,23 @@ export async function updateThesis(
 
 // ── Delete ────────────────────────────────────────────────────────────────────
 
+/**
+ * Deletes a thesis, its tag links, and its PDF.
+ *
+ * `thesisId` is bound by the server (`deleteThesis.bind(null, id)`), so the
+ * FormData argument that React appends is unused — it is named `_formData` to
+ * say so.
+ */
 export async function deleteThesis(thesisId: string, _formData: FormData): Promise<void> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  type OwnerRow = { id: string; uploaded_by: string; pdf_file: string }
-  const { data: thesis } = await (
-    supabase
-      .from('theses')
-      .select('id, uploaded_by, pdf_file')
-      .eq('id', thesisId)
-      .single() as unknown as DbResult<OwnerRow>
-  )
+  const { data: thesis } = await supabase
+    .from('theses')
+    .select('id, uploaded_by, pdf_file')
+    .eq('id', thesisId)
+    .single()
 
   if (!thesis || thesis.uploaded_by !== user.id) redirect('/profile')
 
@@ -264,7 +272,7 @@ export async function deleteThesis(thesisId: string, _formData: FormData): Promi
   await admin.from('thesis_tags').delete().eq('thesis_id', thesisId)
   await admin.from('theses').delete().eq('id', thesisId)
   if (thesis.pdf_file) {
-    await admin.storage.from('thesis-pdfs').remove([thesis.pdf_file])
+    await admin.storage.from(THESIS_PDF_BUCKET).remove([thesis.pdf_file])
   }
 
   revalidatePath('/theses')

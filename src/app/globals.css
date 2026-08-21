@@ -42,6 +42,34 @@ body {
 
 /* ─── Reusable component classes ────────────────────────────── */
 
+/* Page gutter — the horizontal rhythm every routed page shares.
+   Only the gutter is here; each page keeps its own `max-w-*` and `py-*`
+   inline, because those are the parts that legitimately differ
+   (max-w-3xl for forms, 5xl for reading, 7xl for grids). */
+.page-gutter {
+  margin-inline: auto;
+  padding-inline: 1rem;
+}
+@media (min-width: 640px) {
+  .page-gutter { padding-inline: 1.5rem; }
+}
+@media (min-width: 1024px) {
+  .page-gutter { padding-inline: 2rem; }
+}
+
+/* Loading skeleton placeholder.
+   Sizing and border-radius stay inline at the call site — the bars vary from
+   `rounded` to `rounded-full` to `rounded-xl` depending on what they stand in
+   for. This class only owns the fill and the pulse. */
+@keyframes skeleton-pulse { 50% { opacity: 0.5; } }
+.skeleton {
+  background-color: #f1f5f9; /* slate-100 */
+  animation: skeleton-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton { animation: none; }
+}
+
 /* Buttons */
 .btn {
   display: inline-flex;

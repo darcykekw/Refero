@@ -1,19 +1,25 @@
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/server'
+import { getCurrentUser } from '@/lib/auth'
 import NavbarClient from './NavbarClient'
 
 /**
  * Server Component shell — fetches current user on the server so the
  * nav renders correctly without a client-side flash, then delegates
  * all interactive behaviour to NavbarClient.
+ *
+ * Reading the user here is what makes every route dynamic: the navbar sits in
+ * the root layout, so no page can be prerendered. That is the intended trade —
+ * the whole site is behind a login, so there is nothing to prerender anyway —
+ * but it does mean the `revalidatePath()` calls in the server actions have no
+ * cached output to invalidate today. They are kept because they become load-
+ * bearing the moment any route does get cached.
  */
 export default async function Navbar() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getCurrentUser()
 
   return (
     <header className="fixed top-0 inset-x-0 z-50 bg-white/90 backdrop-blur-md border-b border-slate-200 shadow-sm">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="max-w-7xl page-gutter">
         <div className="relative flex h-16 items-center justify-between">
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2.5 group flex-shrink-0">

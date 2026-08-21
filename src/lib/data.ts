@@ -2,11 +2,30 @@
  * Shared Supabase data-access helpers — all run on the server.
  * Import into Server Components and Server Actions.
  *
- * The Supabase client can't auto-infer deeply nested join shapes from our
- * hand-written Database type, so we fetch with explicit casts.
+ * Read helpers are wrapped in React's `cache()`, which memoises per request.
+ * Two components in the same render that ask for the same thesis share one
+ * query instead of issuing two.
  */
+import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import type { College, Program, Tag, Thesis, ThesisWithRelations } from '@/types/database'
+
+// ── PostgREST filter escaping ────────────────────────────────────────────────
+
+/**
+ * Quotes a user-supplied value for use inside a PostgREST filter string.
+ *
+ * `or()` takes filters as one comma-separated string, so an unescaped comma,
+ * dot or parenthesis in a search box lets the visitor append their own
+ * conditions to the query. Wrapping the value in double quotes makes PostgREST
+ * treat all of it as data; inside the quotes only `"` and `\` need escaping.
+ *
+ * `%` and `_` stay as-is — they are LIKE wildcards, so a visitor can broaden
+ * their own search but cannot change which columns are matched.
+ */
+function pgFilterValue(value: string): string {
+  return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
+}
 
 // ── Site stats ───────────────────────────────────────────────────────────────
 
@@ -17,7 +36,7 @@ export interface SiteStats {
   tag_count: number
 }
 
-export async function getSiteStats(): Promise<SiteStats> {
+export const getSiteStats = cache(async (): Promise<SiteStats> => {
   const supabase = await createClient()
   const [theses, colleges, programs, tags] = await Promise.all([
     supabase.from('theses').select('id', { count: 'exact', head: true }),
@@ -31,27 +50,32 @@ export async function getSiteStats(): Promise<SiteStats> {
     program_count: programs.count ?? 0,
     tag_count:     tags.count    ?? 0,
   }
-}
+})
 
 // ── Raw join row shape returned by Supabase ──────────────────────────────────
 
-/** What Supabase returns for the thesis + tags join */
+/**
+ * What Supabase returns for the thesis + tags join.
+ *
+ * The junction table means tags arrive one level deeper than callers want —
+ * `[{ tag: {...} }]` rather than `[{...}]` — so `flattenTags` unwraps them.
+ */
 interface ThesisJoinRow extends Thesis {
   college: College
   program: Program
-  tags: { tag: Tag }[]
+  tags: { tag: Tag | null }[]
 }
 
 function flattenTags(rows: ThesisJoinRow[]): ThesisWithRelations[] {
   return rows.map(row => ({
     ...row,
-    tags: row.tags.map(t => t.tag).filter(Boolean) as Tag[],
+    tags: row.tags.map(t => t.tag).filter((tag): tag is Tag => tag != null),
   }))
 }
 
 // ── Featured theses (home page) ───────────────────────────────────────────────
 
-export async function getFeaturedTheses(programId?: string): Promise<ThesisWithRelations[]> {
+export const getFeaturedTheses = cache(async (programId?: string): Promise<ThesisWithRelations[]> => {
   const supabase = await createClient()
 
   let query = supabase
@@ -70,19 +94,28 @@ export async function getFeaturedTheses(programId?: string): Promise<ThesisWithR
     return []
   }
 
-  return flattenTags((data ?? []) as unknown as ThesisJoinRow[])
-}
+  return flattenTags(data ?? [])
+})
 
-// ── Programs (for filter) ─────────────────────────────────────────────────────
+// ── Colleges & programs (for filters and form pickers) ───────────────────────
 
-export async function getAllPrograms(): Promise<Program[]> {
+export const getAllColleges = cache(async (): Promise<College[]> => {
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from('colleges')
+    .select('*')
+    .order('college_name')
+  return data ?? []
+})
+
+export const getAllPrograms = cache(async (): Promise<Program[]> => {
   const supabase = await createClient()
   const { data } = await supabase
     .from('programs')
     .select('*')
     .order('prog_name')
-  return (data ?? []) as Program[]
-}
+  return data ?? []
+})
 
 // ── Theses listing (search + tags + pagination) ───────────────────────────────
 
@@ -122,9 +155,23 @@ export async function getThesesList(opts: {
     .range(from, to)
 
   if (opts.query) {
-    q = q.or(
-      `title.ilike.%${opts.query}%,authors.ilike.%${opts.query}%,abstract.ilike.%${opts.query}%`
-    )
+    // Values are quoted so a comma or dot in the search box cannot terminate
+    // this filter branch and append conditions of the visitor's choosing.
+    const pattern = pgFilterValue(`%${opts.query}%`)
+    const branches = [
+      `title.ilike.${pattern}`,
+      `authors.ilike.${pattern}`,
+      `abstract.ilike.${pattern}`,
+    ]
+
+    // Legacy parity: the Django search also matched tag names.
+    const taggedIds = await getThesisIdsMatchingTagName(supabase, opts.query)
+    if (taggedIds.length > 0) {
+      // UUIDs come from the database, so they need no quoting.
+      branches.push(`id.in.(${taggedIds.join(',')})`)
+    }
+
+    q = q.or(branches.join(','))
   }
 
   if (tagFilterIds !== null) {
@@ -137,7 +184,7 @@ export async function getThesesList(opts: {
     return { theses: [], totalCount: 0, page, totalPages: 0 }
   }
 
-  const theses = flattenTags((data ?? []) as unknown as ThesisJoinRow[])
+  const theses = flattenTags(data ?? [])
   const totalCount = count ?? 0
   return {
     theses,
@@ -147,13 +194,71 @@ export async function getThesesList(opts: {
   }
 }
 
-/** Returns thesis IDs that have ALL of the given tag IDs */
+/** Cap on how many thesis IDs a tag-name match may contribute to a search. */
+const TAG_MATCH_LIMIT = 200
+
+/**
+ * Thesis IDs whose *tags* match the search term.
+ *
+ * The legacy Django query included `Q(tags__name__icontains=query)`; this
+ * restores that arm of the search. `ilike()` is a builder method, so the term is
+ * passed as its own value rather than concatenated into a filter string.
+ */
+async function getThesisIdsMatchingTagName(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  query: string
+): Promise<string[]> {
+  const { data: tagRows } = await supabase
+    .from('tags')
+    .select('id')
+    .ilike('name', `%${query}%`)
+    .limit(50)
+
+  const tagIds = (tagRows ?? []).map(t => t.id)
+  if (tagIds.length === 0) return []
+
+  const { data } = await supabase
+    .from('thesis_tags')
+    .select('thesis_id')
+    .in('tag_id', tagIds)
+    .limit(TAG_MATCH_LIMIT)
+
+  return [...new Set((data ?? []).map(r => r.thesis_id))]
+}
+
+/**
+ * Thesis IDs carrying ALL of the given tags.
+ *
+ * Prefers the `theses_with_all_tags` SQL function from migration 002, which
+ * intersects with `GROUP BY … HAVING count(*)` and returns only the matching
+ * IDs. Falls back to intersecting in JS — which has to pull every junction row
+ * for the selected tags — so tag filtering still works on a database that has
+ * not had migration 002 applied yet.
+ */
 async function getThesisIdsWithAllTags(
   supabase: Awaited<ReturnType<typeof createClient>>,
   tagIds: string[]
 ): Promise<string[]> {
   if (tagIds.length === 0) return []
 
+  const { data, error } = await supabase.rpc('theses_with_all_tags', { tag_ids: tagIds })
+
+  if (!error && data) {
+    return data.map(row => row.thesis_id)
+  }
+
+  console.warn(
+    'theses_with_all_tags() unavailable — intersecting tags in JS. Apply supabase/migrations/002_fixes.sql.',
+    error?.message
+  )
+  return intersectTagsInMemory(supabase, tagIds)
+}
+
+/** JS fallback for getThesisIdsWithAllTags — see the note there. */
+async function intersectTagsInMemory(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  tagIds: string[]
+): Promise<string[]> {
   const { data } = await supabase
     .from('thesis_tags')
     .select('thesis_id, tag_id')
@@ -161,9 +266,8 @@ async function getThesisIdsWithAllTags(
 
   if (!data) return []
 
-  const rows = data as { thesis_id: string; tag_id: string }[]
   const map = new Map<string, Set<string>>()
-  for (const row of rows) {
+  for (const row of data) {
     if (!map.has(row.thesis_id)) map.set(row.thesis_id, new Set())
     map.get(row.thesis_id)!.add(row.tag_id)
   }
@@ -175,19 +279,19 @@ async function getThesisIdsWithAllTags(
 
 // ── Available tags (for filter panel) ────────────────────────────────────────
 
-export async function getAvailableTags(limit = 40): Promise<Tag[]> {
+export const getAvailableTags = cache(async (limit = 40): Promise<Tag[]> => {
   const supabase = await createClient()
   const { data } = await supabase
     .from('tags')
     .select('*')
     .order('name')
     .limit(limit)
-  return (data ?? []) as Tag[]
-}
+  return data ?? []
+})
 
 // ── User uploads ──────────────────────────────────────────────────────────────
 
-export async function getUserTheses(userId: string): Promise<ThesisWithRelations[]> {
+export const getUserTheses = cache(async (userId: string): Promise<ThesisWithRelations[]> => {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('theses')
@@ -200,12 +304,12 @@ export async function getUserTheses(userId: string): Promise<ThesisWithRelations
     return []
   }
 
-  return flattenTags((data ?? []) as unknown as ThesisJoinRow[])
-}
+  return flattenTags(data ?? [])
+})
 
 // ── Single thesis ─────────────────────────────────────────────────────────────
 
-export async function getThesisById(id: string): Promise<ThesisWithRelations | null> {
+export const getThesisById = cache(async (id: string): Promise<ThesisWithRelations | null> => {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('theses')
@@ -214,7 +318,34 @@ export async function getThesisById(id: string): Promise<ThesisWithRelations | n
     .single()
 
   if (error || !data) return null
-  return flattenTags([data as unknown as ThesisJoinRow])[0] ?? null
+  return flattenTags([data])[0] ?? null
+})
+
+// ── View counter ──────────────────────────────────────────────────────────────
+
+/**
+ * Bumps a thesis's view count and returns the new total, or null on failure.
+ *
+ * Delegates to `increment_thesis_views()` (migration 002), which does
+ * `SET view_count = view_count + 1` in a single statement. Reading the count in
+ * the app and writing back `count + 1` — as this used to — loses every view
+ * that overlaps another, because both requests read the same starting value.
+ *
+ * The function is SECURITY DEFINER, so a signed-in reader can bump the counter
+ * on a thesis they do not own without the service-role key being involved.
+ */
+export async function incrementThesisViews(thesisId: string): Promise<number | null> {
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc('increment_thesis_views', {
+    thesis_uuid: thesisId,
+  })
+
+  if (error) {
+    console.error('increment_thesis_views error:', error.message)
+    return null
+  }
+
+  return typeof data === 'number' ? data : null
 }
 
 // ── User profile stats ────────────────────────────────────────────────────────
@@ -236,9 +367,8 @@ export async function getUserStats(userId: string): Promise<UserStats> {
     return { thesisCount: 0, totalViews: 0, avgScore: null }
   }
 
-  const rows = data as { view_count: number; panel_score: number | null }[]
-  const totalViews = rows.reduce((sum, r) => sum + (r.view_count ?? 0), 0)
-  const scored = rows.filter(r => r.panel_score != null)
+  const totalViews = data.reduce((sum, r) => sum + (r.view_count ?? 0), 0)
+  const scored = data.filter(r => r.panel_score != null)
   const avgScore = scored.length > 0
     ? scored.reduce((sum, r) => sum + r.panel_score!, 0) / scored.length
     : null

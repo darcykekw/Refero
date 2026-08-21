@@ -34,6 +34,7 @@ export default function ThesisFormClient({
   const [selectedProgramId, setSelectedProgramId] = useState(initialData?.program_id ?? '')
 
   const filteredPrograms = programs.filter(p => p.college_id === selectedCollegeId)
+  const hasNoPrograms = selectedCollegeId !== '' && filteredPrograms.length === 0
 
   const existingTagIds = new Set(initialData?.tags.map(t => t.id) ?? [])
 
@@ -183,16 +184,32 @@ export default function ThesisFormClient({
             required
             value={selectedProgramId}
             onChange={e => setSelectedProgramId(e.target.value)}
-            disabled={!selectedCollegeId}
+            disabled={!selectedCollegeId || hasNoPrograms}
+            aria-describedby={hasNoPrograms ? 'thesis-program-empty' : undefined}
             className="input disabled:opacity-50"
           >
             <option value="">
-              {selectedCollegeId ? 'Select a program…' : 'Select a college first'}
+              {!selectedCollegeId
+                ? 'Select a college first'
+                : hasNoPrograms
+                  ? 'No programs available'
+                  : 'Select a program…'}
             </option>
             {filteredPrograms.map(p => (
               <option key={p.id} value={p.id}>{p.prog_name}</option>
             ))}
           </select>
+
+          {/* A college with no programs is a dead end: program_id is NOT NULL,
+              so the form can never be submitted. Say so, instead of leaving an
+              empty dropdown and a submit button that fails silently. */}
+          {hasNoPrograms && (
+            <p id="thesis-program-empty" className="mt-1.5 text-sm text-amber-700" role="alert">
+              No programs have been set up for this college yet, so a thesis
+              cannot be filed under it. Pick a different college, or ask an
+              administrator to add your program.
+            </p>
+          )}
         </div>
       </div>
 

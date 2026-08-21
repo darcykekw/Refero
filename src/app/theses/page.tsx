@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { Suspense } from 'react'
-import { createClient } from '@/lib/supabase/server'
+import { getCurrentUser } from '@/lib/auth'
 import { getThesesList, getAvailableTags, getUserTheses } from '@/lib/data'
 import ThesisCard from '@/components/ThesisCard'
 import ThesisSearch from '@/components/ThesisSearch'
@@ -28,16 +28,19 @@ export default async function ThesesPage({ searchParams }: ThesesPageProps) {
     : []
   const page = Math.max(1, parseInt(params.page ?? '1', 10))
 
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-
-  const [listResult, availableTags, userUploads] = await Promise.all([
+  // The list and the tag panel do not depend on who is asking, so they load
+  // alongside the user lookup instead of waiting on it.
+  const [user, listResult, availableTags] = await Promise.all([
+    getCurrentUser(),
     getThesesList({ query, tagIds, page }),
     getAvailableTags(40),
-    user && !query && tagIds.length === 0
-      ? getUserTheses(user.id)
-      : Promise.resolve([]),
   ])
+
+  // "Your uploads" only appears on the unfiltered list, and only for a signed-in
+  // visitor, so it is fetched after the user is known.
+  const userUploads = user && !query && tagIds.length === 0
+    ? await getUserTheses(user.id)
+    : []
 
   const { theses, totalCount, totalPages } = listResult
 
@@ -66,7 +69,7 @@ export default async function ThesesPage({ searchParams }: ThesesPageProps) {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-8">
+    <div className="max-w-7xl page-gutter py-10 space-y-8">
 
       {/* ── Page header + search ─────────────────────────────────────── */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">

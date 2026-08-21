@@ -76,7 +76,7 @@ export default function ThesisCard({ thesis, showActions = false, activeTags = [
                 Edit
               </Link>
               <Link
-                href={`/theses/${thesis.id}/edit?delete=1`}
+                href={`/theses/${thesis.id}/edit?delete=1#delete`}
                 className="text-xs font-medium text-red-500 hover:text-red-600"
               >
                 Delete
