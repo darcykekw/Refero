@@ -444,3 +444,31 @@ h4, h5, h6 {
   box-shadow: 0 4px 14px rgba(17, 33, 23, 0.04);
 }
 
+/* ─── Aesthetic Action Pill ─────────────────────────────────── */
+.action-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.45rem 1.15rem;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(143, 168, 133, 0.35);
+  box-shadow: 0 2px 8px rgba(17, 33, 23, 0.05);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #173B28;
+  text-decoration: none;
+  letter-spacing: 0.01em;
+  transition: all 0.2s ease;
+}
+.action-pill:hover {
+  background: #ffffff;
+  color: #2E6A47;
+  border-color: rgba(46, 106, 71, 0.5);
+  box-shadow: 0 4px 14px rgba(17, 33, 23, 0.1);
+  transform: translateY(-1px);
+}
+
+

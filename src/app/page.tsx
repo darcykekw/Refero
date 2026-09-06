@@ -157,10 +157,10 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           </div>
           <Link
             href="/theses"
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '0.875rem', fontWeight: 600, color: '#2E6A47', textDecoration: 'none', letterSpacing: '0.01em' }}
+            className="action-pill"
           >
-            View all
-            <svg style={{ width: 16, height: 16 }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <span>View all</span>
+            <svg style={{ width: 15, height: 15 }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
             </svg>
           </Link>
