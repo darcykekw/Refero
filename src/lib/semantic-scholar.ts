@@ -19,7 +19,17 @@ export interface SSPaper {
 }
 
 function getApiKey(): string | undefined {
-  return process.env.SEMANTIC_SCHOLAR_API_KEY
+  return process.env.SEMANTIC_SCHOLAR_API_KEY || 'PkvDzDAqLXLUmIJP2X1P2LsJJeFqrEs1bIqnoCu4'
+}
+
+function getHeaders(apiKey?: string): HeadersInit {
+  const headers: Record<string, string> = {
+    'User-Agent': 'ReferoThesisHub/1.0',
+  }
+  if (apiKey) {
+    headers['x-api-key'] = apiKey
+  }
+  return headers
 }
 
 /**
@@ -40,7 +50,7 @@ export async function getPaperId(title: string): Promise<string | null> {
       limit: '1',
     })
     const res = await fetch(`${SS_API_BASE_URL}/paper/search?${params}`, {
-      headers: { 'x-api-key': apiKey },
+      headers: getHeaders(apiKey),
       next: { revalidate: 3600 }, // cache for 1 hour
     })
 
@@ -81,7 +91,7 @@ export async function getThesisRecommendations(
       const res = await fetch(
         `${SS_RECOMMENDATIONS_URL}${paperId}?${params}`,
         {
-          headers: { 'x-api-key': apiKey },
+          headers: getHeaders(apiKey),
           next: { revalidate: 3600 },
         }
       )
@@ -100,7 +110,7 @@ export async function getThesisRecommendations(
   try {
     const params = new URLSearchParams({ query: thesisTitle, fields, limit: '5' })
     const res = await fetch(`${SS_API_BASE_URL}/paper/search?${params}`, {
-      headers: { 'x-api-key': apiKey },
+      headers: getHeaders(apiKey),
       next: { revalidate: 3600 },
     })
 
