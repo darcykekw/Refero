@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { Suspense } from 'react'
 import { getCurrentUser } from '@/lib/auth'
@@ -22,11 +23,21 @@ export default async function UploadPage() {
   ])
 
   return (
-    <div className="max-w-3xl page-gutter py-10">
-      <div className="mb-8">
-        <p className="text-sm text-slate-500 mb-1">Refero Repository</p>
-        <h1 className="text-3xl font-bold text-slate-900">Upload Thesis</h1>
-        <p className="text-slate-500 mt-1">Fill in the details below and attach a PDF file.</p>
+    <div className="max-w-3xl page-gutter py-10 space-y-6">
+      {/* Breadcrumb */}
+      <nav className="breadcrumb-bar" aria-label="Breadcrumb">
+        <Link href="/">Home</Link>
+        <span className="divider">/</span>
+        <Link href="/theses">Theses</Link>
+        <span className="divider">/</span>
+        <span className="current">Upload</span>
+      </nav>
+
+      {/* Page Header */}
+      <div className="page-header-banner">
+        <p className="text-xs font-bold uppercase tracking-wider text-emerald-800 mb-1">Refero Repository</p>
+        <h1 className="text-3xl font-bold" style={{ fontFamily: "'Playfair Display', Georgia, serif", color: '#112117' }}>Upload Thesis</h1>
+        <p className="text-sm mt-1" style={{ color: '#435A4C' }}>Fill in the details below and attach a PDF file.</p>
       </div>
 
       <div className="card p-6 sm:p-8">

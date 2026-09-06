@@ -71,11 +71,18 @@ export default async function ThesesPage({ searchParams }: ThesesPageProps) {
   return (
     <div className="max-w-7xl page-gutter py-10 space-y-8">
 
+      {/* Breadcrumb */}
+      <nav className="breadcrumb-bar" aria-label="Breadcrumb">
+        <Link href="/">Home</Link>
+        <span className="divider">/</span>
+        <span className="current">Theses</span>
+      </nav>
+
       {/* ── Page header + search ─────────────────────────────────────── */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="page-header-banner flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900">Theses</h1>
-          <p className="text-slate-500 text-sm mt-1">
+          <h1 className="text-3xl font-bold" style={{ fontFamily: "'Playfair Display', Georgia, serif", color: '#112117' }}>Theses</h1>
+          <p className="text-sm mt-1" style={{ color: '#598567', fontWeight: 500 }}>
             {totalCount.toLocaleString()} {totalCount === 1 ? 'thesis' : 'theses'} found
           </p>
         </div>
@@ -124,9 +131,14 @@ export default async function ThesesPage({ searchParams }: ThesesPageProps) {
       {/* ── My Uploads (only when not searching) ─────────────────────── */}
       {user && Array.isArray(userUploads) && userUploads.length > 0 && (
         <section>
-          <div className="flex items-center gap-2 mb-4">
-            <div className="h-5 w-1 rounded-full bg-sky-600" />
-            <h2 className="text-xl font-bold text-slate-800">My Theses</h2>
+          <div className="section-bar mb-4">
+            <div className="flex items-center gap-2.5">
+              <div className="h-5 w-1 rounded-full bg-emerald-700" />
+              <h2 className="text-xl font-bold" style={{ fontFamily: "'Playfair Display', Georgia, serif", color: '#112117' }}>My Theses</h2>
+            </div>
+            <Link href="/theses/upload" className="btn btn-primary btn-sm">
+              + Upload
+            </Link>
           </div>
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {userUploads.map(thesis => (
@@ -138,9 +150,8 @@ export default async function ThesesPage({ searchParams }: ThesesPageProps) {
             ))}
           </div>
           <div className="mt-8 pt-6 border-t border-slate-200">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="h-5 w-1 rounded-full bg-slate-300" />
-              <h2 className="text-xl font-bold text-slate-800">All Theses</h2>
+            <div className="section-header mb-4">
+              <h2 className="section-title text-xl">All Theses</h2>
             </div>
           </div>
         </section>
