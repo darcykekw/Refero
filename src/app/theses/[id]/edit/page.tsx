@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { Suspense } from 'react'
 import { getCurrentUser } from '@/lib/auth'
@@ -41,10 +42,22 @@ export default async function EditThesisPage({ params, searchParams }: PageProps
   const deleteAction = deleteThesis.bind(null, thesis.id)
 
   return (
-    <div className="max-w-3xl page-gutter py-10 space-y-8">
-      <div className="mb-2">
-        <p className="text-sm text-slate-500 mb-1">Editing thesis</p>
-        <h1 className="text-2xl font-bold text-slate-900 leading-snug">{thesis.title}</h1>
+    <div className="max-w-3xl page-gutter py-10 space-y-6">
+      {/* Breadcrumb */}
+      <nav className="breadcrumb-bar" aria-label="Breadcrumb">
+        <Link href="/">Home</Link>
+        <span className="divider">/</span>
+        <Link href="/theses">Theses</Link>
+        <span className="divider">/</span>
+        <Link href={`/theses/${thesis.id}`} className="truncate max-w-[180px] sm:max-w-xs inline-block align-bottom">{thesis.title}</Link>
+        <span className="divider">/</span>
+        <span className="current">Edit</span>
+      </nav>
+
+      {/* Page Header Banner */}
+      <div className="page-header-banner">
+        <p className="text-xs font-bold uppercase tracking-wider text-emerald-800 mb-1">Editing thesis</p>
+        <h1 className="text-2xl font-bold leading-snug" style={{ fontFamily: "'Playfair Display', Georgia, serif", color: '#112117' }}>{thesis.title}</h1>
       </div>
 
       {/* Edit form */}

@@ -27,7 +27,14 @@ export default async function ProfilePage() {
   ])
 
   return (
-    <div className="max-w-5xl page-gutter py-10 space-y-10">
+    <div className="max-w-5xl page-gutter py-10 space-y-8">
+
+      {/* Breadcrumb */}
+      <nav className="breadcrumb-bar" aria-label="Breadcrumb">
+        <Link href="/">Home</Link>
+        <span className="divider">/</span>
+        <span className="current">My Profile</span>
+      </nav>
 
       {/* Profile header */}
       <div className="card p-6 sm:p-8 space-y-6">
@@ -69,12 +76,15 @@ export default async function ProfilePage() {
       </div>
 
       {/* Upload CTA */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-bold text-slate-800">My Theses</h2>
-          {theses.length > 0 && (
-            <p className="text-sm text-slate-400 mt-0.5">{theses.length} uploaded</p>
-          )}
+      <div className="section-bar">
+        <div className="flex items-center gap-3">
+          <div className="w-1 h-6 rounded-full bg-emerald-700" />
+          <div>
+            <h2 className="text-xl font-bold" style={{ fontFamily: "'Playfair Display', Georgia, serif", color: '#112117' }}>My Theses</h2>
+            {theses.length > 0 && (
+              <p className="text-xs text-slate-500 mt-0.5">{theses.length} uploaded</p>
+            )}
+          </div>
         </div>
         <Link href="/theses/upload" className="btn btn-primary btn-sm">
           + Upload thesis

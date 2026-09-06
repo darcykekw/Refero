@@ -39,7 +39,7 @@ export default function ThesisFormClient({
   const existingTagIds = new Set(initialData?.tags.map(t => t.id) ?? [])
 
   return (
-    <form action={formAction} className="space-y-6" encType="multipart/form-data">
+    <form action={formAction} className="space-y-6">
       {/* Hidden thesis ID for edit mode */}
       {mode === 'edit' && initialData && (
         <input type="hidden" name="thesis_id" value={initialData.id} />

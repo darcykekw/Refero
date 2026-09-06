@@ -42,12 +42,12 @@ export default async function ThesisDetailPage({ params }: PageProps) {
     <div className="max-w-5xl page-gutter py-10 space-y-8">
 
       {/* Breadcrumb */}
-      <nav className="flex items-center gap-2 text-sm text-slate-400">
-        <Link href="/" className="hover:text-slate-600">Home</Link>
-        <span>/</span>
-        <Link href="/theses" className="hover:text-slate-600">Theses</Link>
-        <span>/</span>
-        <span className="text-slate-600 truncate max-w-xs">{thesis.title}</span>
+      <nav className="breadcrumb-bar" aria-label="Breadcrumb">
+        <Link href="/">Home</Link>
+        <span className="divider">/</span>
+        <Link href="/theses">Theses</Link>
+        <span className="divider">/</span>
+        <span className="current truncate max-w-xs sm:max-w-md">{thesis.title}</span>
       </nav>
 
       {/* Header */}
@@ -168,10 +168,9 @@ async function RelatedPapers({
 
   return (
     <section>
-      <div className="flex items-center gap-2 mb-4">
-        <div className="h-5 w-1 rounded-full bg-sky-600" />
-        <h2 className="text-xl font-bold text-slate-800">Related Papers</h2>
-        <span className="text-xs text-slate-400 ml-1">via Semantic Scholar</span>
+      <div className="section-header mb-4">
+        <h2 className="section-title text-xl">Related Papers</h2>
+        <span className="text-xs text-slate-500 ml-1 font-normal">via Semantic Scholar</span>
       </div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {recommendations.map(paper => (
