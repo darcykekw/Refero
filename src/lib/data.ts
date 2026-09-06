@@ -10,6 +10,30 @@ import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import type { College, Program, Tag, Thesis, ThesisWithRelations } from '@/types/database'
 
+// ── UUID validation helper ───────────────────────────────────────────────────
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+export function isValidUUID(id?: string | null): id is string {
+  return typeof id === 'string' && UUID_REGEX.test(id.trim())
+}
+
+// ── Query clock skew retry helper ───────────────────────────────────────────
+
+/**
+ * Handles transient clock skew (e.g. "JWT issued at future") by retrying after
+ * a brief delay if local client time is slightly ahead of Supabase server time.
+ */
+async function runWithRetry<T>(fn: () => PromiseLike<T>): Promise<T> {
+  let result = await fn()
+  const err = (result as { error?: { message?: string } | null })?.error
+  if (err && typeof err.message === 'string' && (err.message.includes('JWT issued at future') || err.message.includes('future'))) {
+    await new Promise(resolve => setTimeout(resolve, 2500))
+    result = await fn()
+  }
+  return result
+}
+
 // ── PostgREST filter escaping ────────────────────────────────────────────────
 
 /**
@@ -76,6 +100,11 @@ function flattenTags(rows: ThesisJoinRow[]): ThesisWithRelations[] {
 // ── Featured theses (home page) ───────────────────────────────────────────────
 
 export const getFeaturedTheses = cache(async (programId?: string): Promise<ThesisWithRelations[]> => {
+  // If an invalid programId format is provided, return empty without querying DB
+  if (programId && !isValidUUID(programId)) {
+    return []
+  }
+
   const supabase = await createClient()
 
   let query = supabase
@@ -84,13 +113,13 @@ export const getFeaturedTheses = cache(async (programId?: string): Promise<Thesi
     .order('date_added', { ascending: false })
     .limit(6)
 
-  if (programId) {
+  if (programId && isValidUUID(programId)) {
     query = query.eq('program_id', programId)
   }
 
-  const { data, error } = await query
+  const { data, error } = await runWithRetry(() => query)
   if (error) {
-    console.error('getFeaturedTheses error:', error)
+    console.error('getFeaturedTheses error:', error.message || error)
     return []
   }
 
@@ -101,19 +130,23 @@ export const getFeaturedTheses = cache(async (programId?: string): Promise<Thesi
 
 export const getAllColleges = cache(async (): Promise<College[]> => {
   const supabase = await createClient()
-  const { data } = await supabase
-    .from('colleges')
-    .select('*')
-    .order('college_name')
+  const { data } = await runWithRetry(() =>
+    supabase
+      .from('colleges')
+      .select('*')
+      .order('college_name')
+  )
   return data ?? []
 })
 
 export const getAllPrograms = cache(async (): Promise<Program[]> => {
   const supabase = await createClient()
-  const { data } = await supabase
-    .from('programs')
-    .select('*')
-    .order('prog_name')
+  const { data } = await runWithRetry(() =>
+    supabase
+      .from('programs')
+      .select('*')
+      .order('prog_name')
+  )
   return data ?? []
 })
 
@@ -141,7 +174,11 @@ export async function getThesesList(opts: {
   // Collect thesis IDs that match all selected tags (if any)
   let tagFilterIds: string[] | null = null
   if (opts.tagIds && opts.tagIds.length > 0) {
-    tagFilterIds = await getThesisIdsWithAllTags(supabase, opts.tagIds)
+    const validTagIds = opts.tagIds.filter(isValidUUID)
+    if (validTagIds.length === 0) {
+      return { theses: [], totalCount: 0, page, totalPages: 0 }
+    }
+    tagFilterIds = await getThesisIdsWithAllTags(supabase, validTagIds)
     // If no theses match all tags, short-circuit
     if (tagFilterIds.length === 0) {
       return { theses: [], totalCount: 0, page, totalPages: 0 }
@@ -178,9 +215,9 @@ export async function getThesesList(opts: {
     q = q.in('id', tagFilterIds)
   }
 
-  const { data, error, count } = await q
+  const { data, error, count } = await runWithRetry(() => q)
   if (error) {
-    console.error('getThesesList error:', error)
+    console.error('getThesesList error:', error.message || error)
     return { theses: [], totalCount: 0, page, totalPages: 0 }
   }
 
@@ -281,26 +318,31 @@ async function intersectTagsInMemory(
 
 export const getAvailableTags = cache(async (limit = 40): Promise<Tag[]> => {
   const supabase = await createClient()
-  const { data } = await supabase
-    .from('tags')
-    .select('*')
-    .order('name')
-    .limit(limit)
+  const { data } = await runWithRetry(() =>
+    supabase
+      .from('tags')
+      .select('*')
+      .order('name')
+      .limit(limit)
+  )
   return data ?? []
 })
 
 // ── User uploads ──────────────────────────────────────────────────────────────
 
 export const getUserTheses = cache(async (userId: string): Promise<ThesisWithRelations[]> => {
+  if (!isValidUUID(userId)) return []
   const supabase = await createClient()
-  const { data, error } = await supabase
-    .from('theses')
-    .select(`*, college:colleges(*), program:programs(*), tags:thesis_tags(tag:tags(*))`)
-    .eq('uploaded_by', userId)
-    .order('date_added', { ascending: false })
+  const { data, error } = await runWithRetry(() =>
+    supabase
+      .from('theses')
+      .select(`*, college:colleges(*), program:programs(*), tags:thesis_tags(tag:tags(*))`)
+      .eq('uploaded_by', userId)
+      .order('date_added', { ascending: false })
+  )
 
   if (error) {
-    console.error('getUserTheses error:', error)
+    console.error('getUserTheses error:', error.message || error)
     return []
   }
 
@@ -310,12 +352,15 @@ export const getUserTheses = cache(async (userId: string): Promise<ThesisWithRel
 // ── Single thesis ─────────────────────────────────────────────────────────────
 
 export const getThesisById = cache(async (id: string): Promise<ThesisWithRelations | null> => {
+  if (!isValidUUID(id)) return null
   const supabase = await createClient()
-  const { data, error } = await supabase
-    .from('theses')
-    .select(`*, college:colleges(*), program:programs(*), tags:thesis_tags(tag:tags(*))`)
-    .eq('id', id)
-    .single()
+  const { data, error } = await runWithRetry(() =>
+    supabase
+      .from('theses')
+      .select(`*, college:colleges(*), program:programs(*), tags:thesis_tags(tag:tags(*))`)
+      .eq('id', id)
+      .single()
+  )
 
   if (error || !data) return null
   return flattenTags([data])[0] ?? null
@@ -335,13 +380,16 @@ export const getThesisById = cache(async (id: string): Promise<ThesisWithRelatio
  * on a thesis they do not own without the service-role key being involved.
  */
 export async function incrementThesisViews(thesisId: string): Promise<number | null> {
+  if (!isValidUUID(thesisId)) return null
   const supabase = await createClient()
-  const { data, error } = await supabase.rpc('increment_thesis_views', {
-    thesis_uuid: thesisId,
-  })
+  const { data, error } = await runWithRetry(() =>
+    supabase.rpc('increment_thesis_views', {
+      thesis_uuid: thesisId,
+    })
+  )
 
   if (error) {
-    console.error('increment_thesis_views error:', error.message)
+    console.error('increment_thesis_views error:', error.message || error)
     return null
   }
 
@@ -357,11 +405,16 @@ export interface UserStats {
 }
 
 export async function getUserStats(userId: string): Promise<UserStats> {
+  if (!isValidUUID(userId)) {
+    return { thesisCount: 0, totalViews: 0, avgScore: null }
+  }
   const supabase = await createClient()
-  const { data } = await supabase
-    .from('theses')
-    .select('view_count, panel_score')
-    .eq('uploaded_by', userId)
+  const { data } = await runWithRetry(() =>
+    supabase
+      .from('theses')
+      .select('view_count, panel_score')
+      .eq('uploaded_by', userId)
+  )
 
   if (!data || data.length === 0) {
     return { thesisCount: 0, totalViews: 0, avgScore: null }
