@@ -19,3 +19,13 @@ export const getCurrentUser = cache(async (): Promise<User | null> => {
   const { data: { user } } = await supabase.auth.getUser()
   return user
 })
+
+export const ADMIN_EMAILS = ['202380256@psu.palawan.edu.ph']
+
+export function isAdminUser(user: User | null): boolean {
+  if (!user) return false
+  if (user.email && ADMIN_EMAILS.includes(user.email.toLowerCase())) return true
+  if (user.app_metadata?.role === 'admin') return true
+  if (user.user_metadata?.role === 'admin') return true
+  return false
+}

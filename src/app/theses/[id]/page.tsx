@@ -162,37 +162,68 @@ async function RelatedPapers({
   let recommendations: SSPaper[] = []
   try {
     recommendations = await getThesisRecommendations(title, ssPaperId)
-  } catch { /* graceful fallback — the section just doesn't render */ }
+  } catch {
+    /* graceful fallback */
+  }
 
   if (recommendations.length === 0) return null
 
   return (
-    <section>
-      <div className="section-header mb-4">
-        <h2 className="section-title text-xl">Related Papers</h2>
-        <span className="text-xs text-slate-500 ml-1 font-normal">via Semantic Scholar</span>
+    <section className="space-y-4">
+      <div className="section-header">
+        <div className="flex items-center gap-2">
+          <h2 className="section-title text-xl">Related Research Papers</h2>
+          <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-emerald-100/80 text-emerald-800 border border-emerald-200/60">
+            Semantic Scholar
+          </span>
+        </div>
       </div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {recommendations.map(paper => (
-          <a
-            key={paper.paperId}
-            href={`https://www.semanticscholar.org/paper/${paper.paperId}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="card card-hover p-4 space-y-2 block"
-          >
-            <p className="font-semibold text-sm text-slate-800 leading-snug line-clamp-2">
-              {paper.title}
-            </p>
-            <p className="text-xs text-slate-400">
-              {paper.authors.map(a => a.name).join(', ')}
-              {paper.year ? ` · ${paper.year}` : ''}
-            </p>
-            {paper.abstract && (
-              <p className="text-xs text-slate-500 line-clamp-3">{paper.abstract}</p>
-            )}
-          </a>
-        ))}
+        {recommendations.map(paper => {
+          const paperLink =
+            paper.s2Url ||
+            paper.url ||
+            `https://www.semanticscholar.org/search?q=${encodeURIComponent(paper.title)}`
+
+          return (
+            <a
+              key={paper.paperId}
+              href={paperLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="card card-hover p-5 space-y-2.5 block group transition-all duration-200"
+              style={{
+                borderTop: '3px solid #386641',
+              }}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <p className="font-semibold text-sm text-slate-800 leading-snug line-clamp-2 group-hover:text-emerald-800 transition-colors">
+                  {paper.title}
+                </p>
+                <span className="text-slate-400 group-hover:text-emerald-700 transition-colors shrink-0 mt-0.5">
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                </span>
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
+                {paper.authors.length > 0 && (
+                  <span className="line-clamp-1">{paper.authors.map(a => a.name).join(', ')}</span>
+                )}
+                {paper.year && (
+                  <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-800 font-medium text-[11px]">
+                    {paper.year}
+                  </span>
+                )}
+              </div>
+              {paper.abstract && (
+                <p className="text-xs text-slate-600 line-clamp-3 leading-relaxed">
+                  {paper.abstract}
+                </p>
+              )}
+            </a>
+          )
+        })}
       </div>
     </section>
   )
