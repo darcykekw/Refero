@@ -12,17 +12,26 @@ export const metadata: Metadata = {
   keywords: ['thesis', 'research', 'college of sciences', 'academic', 'repository', 'PALSU'],
 }
 
-export default function RootLayout({
+import { headers } from 'next/headers'
+
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
+  const headerList = await headers()
+  const pathname = headerList.get('x-pathname') || ''
+  const isAdminRoute = pathname.startsWith('/admin')
+
   return (
-    <html lang="en" className="h-full">
-      <body className="min-h-full flex flex-col">
-        <Navbar />
-        {/* Offset for fixed navbar (66px height) */}
-        <main className="flex-1 flex flex-col" style={{ paddingTop: '66px' }}>
+    <html lang="en" className="h-full" data-scroll-behavior="smooth" suppressHydrationWarning>
+      <body className="min-h-full flex flex-col" suppressHydrationWarning>
+        {!isAdminRoute && <Navbar />}
+        {/* Offset for fixed navbar only on non-admin routes */}
+        <main
+          className="flex-1 flex flex-col"
+          style={{ paddingTop: isAdminRoute ? '0px' : '66px' }}
+        >
           {children}
         </main>
       </body>

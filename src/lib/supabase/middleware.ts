@@ -19,7 +19,16 @@ function isProtectedPath(pathname: string): boolean {
  * Must be called from proxy.ts to keep the session alive.
  */
 export async function updateSession(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({ request })
+  const { pathname, search, searchParams } = request.nextUrl
+
+  const requestHeaders = new Headers(request.headers)
+  requestHeaders.set('x-pathname', pathname)
+
+  let supabaseResponse = NextResponse.next({
+    request: {
+      headers: requestHeaders,
+    },
+  })
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -33,7 +42,11 @@ export async function updateSession(request: NextRequest) {
           cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value)
           )
-          supabaseResponse = NextResponse.next({ request })
+          supabaseResponse = NextResponse.next({
+            request: {
+              headers: requestHeaders,
+            },
+          })
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options)
           )
@@ -47,7 +60,42 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
-  const { pathname, search, searchParams } = request.nextUrl
+  // Admin routes: require admin access
+  const isAdmin =
+    (user?.email && user.email.toLowerCase() === '202380256@psu.palawan.edu.ph') ||
+    user?.app_metadata?.role === 'admin' ||
+    user?.user_metadata?.role === 'admin'
+
+  if (pathname.startsWith('/admin')) {
+    if (!user) {
+      const loginUrl = request.nextUrl.clone()
+      loginUrl.pathname = '/login'
+      loginUrl.search = ''
+      loginUrl.searchParams.set('redirectTo', `${pathname}${search}`)
+      return NextResponse.redirect(loginUrl)
+    }
+
+    if (!isAdmin) {
+      const homeUrl = request.nextUrl.clone()
+      homeUrl.pathname = '/'
+      homeUrl.search = '?error=unauthorized'
+      return NextResponse.redirect(homeUrl)
+    }
+  }
+
+  // If user is admin and visits the public landing page or public feed, route strictly to admin UI
+  if (user && isAdmin) {
+    if (pathname === '/') {
+      const adminUrl = request.nextUrl.clone()
+      adminUrl.pathname = '/admin'
+      return NextResponse.redirect(adminUrl)
+    }
+    if (pathname === '/theses') {
+      const adminUrl = request.nextUrl.clone()
+      adminUrl.pathname = '/admin/feed'
+      return NextResponse.redirect(adminUrl)
+    }
+  }
 
   // Protected routes: redirect unauthenticated users to /login
   if (isProtectedPath(pathname) && !user) {

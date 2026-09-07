@@ -110,6 +110,7 @@ export const getFeaturedTheses = cache(async (programId?: string): Promise<Thesi
   let query = supabase
     .from('theses')
     .select(`*, college:colleges(*), program:programs(*), tags:thesis_tags(tag:tags(*))`)
+    .or('status.eq.verified,status.is.null')
     .order('date_added', { ascending: false })
     .limit(6)
 
@@ -117,7 +118,21 @@ export const getFeaturedTheses = cache(async (programId?: string): Promise<Thesi
     query = query.eq('program_id', programId)
   }
 
-  const { data, error } = await runWithRetry(() => query)
+  let { data, error } = await runWithRetry(() => query)
+  if (error && (error as any).code === '42703') {
+    let fallbackQuery = supabase
+      .from('theses')
+      .select(`*, college:colleges(*), program:programs(*), tags:thesis_tags(tag:tags(*))`)
+      .order('date_added', { ascending: false })
+      .limit(6)
+    if (programId && isValidUUID(programId)) {
+      fallbackQuery = fallbackQuery.eq('program_id', programId)
+    }
+    const fallbackRes = await runWithRetry(() => fallbackQuery)
+    data = fallbackRes.data
+    error = fallbackRes.error
+  }
+
   if (error) {
     console.error('getFeaturedTheses error:', error.message || error)
     return []
@@ -188,6 +203,7 @@ export async function getThesesList(opts: {
   let q = supabase
     .from('theses')
     .select(`*, college:colleges(*), program:programs(*), tags:thesis_tags(tag:tags(*))`, { count: 'exact' })
+    .or('status.eq.verified,status.is.null')
     .order('date_added', { ascending: false })
     .range(from, to)
 
@@ -215,7 +231,23 @@ export async function getThesesList(opts: {
     q = q.in('id', tagFilterIds)
   }
 
-  const { data, error, count } = await runWithRetry(() => q)
+  let { data, error, count } = await runWithRetry(() => q)
+  if (error && (error as any).code === '42703') {
+    // Fallback if status column is not yet present
+    let fallbackQ = supabase
+      .from('theses')
+      .select(`*, college:colleges(*), program:programs(*), tags:thesis_tags(tag:tags(*))`, { count: 'exact' })
+      .order('date_added', { ascending: false })
+      .range(from, to)
+    if (tagFilterIds !== null) {
+      fallbackQ = fallbackQ.in('id', tagFilterIds)
+    }
+    const fallbackRes = await runWithRetry(() => fallbackQ)
+    data = fallbackRes.data
+    error = fallbackRes.error
+    count = fallbackRes.count
+  }
+
   if (error) {
     console.error('getThesesList error:', error.message || error)
     return { theses: [], totalCount: 0, page, totalPages: 0 }

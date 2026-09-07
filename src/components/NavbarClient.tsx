@@ -60,6 +60,17 @@ export default function NavbarClient({ initialUser }: NavbarClientProps) {
   const avatarUrl = user?.user_metadata?.avatar_url ?? null
   const initials = displayName.charAt(0).toUpperCase()
 
+  const isAdmin =
+    user?.email?.toLowerCase() === '202380256@psu.palawan.edu.ph' ||
+    user?.app_metadata?.role === 'admin' ||
+    user?.user_metadata?.role === 'admin'
+
+  const menuItems = [
+    ...(isAdmin ? [{ href: '/admin', label: 'Admin Dashboard', icon: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z' }] : []),
+    { href: '/profile', label: 'Profile', icon: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z' },
+    { href: '/theses/upload', label: 'Upload Thesis', icon: 'M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12' },
+  ]
+
   return (
     <>
       {/* Desktop nav */}
@@ -99,6 +110,28 @@ export default function NavbarClient({ initialUser }: NavbarClientProps) {
             </Link>
           )
         })}
+
+        {isAdmin && (
+          <Link
+            href="/admin"
+            style={{
+              padding: '0.4rem 0.9rem',
+              borderRadius: '6px',
+              fontSize: '0.8125rem',
+              fontWeight: 700,
+              letterSpacing: '0.04em',
+              textTransform: 'uppercase',
+              textDecoration: 'none',
+              color: '#FDE047',
+              background: 'rgba(234, 179, 8, 0.15)',
+              border: '1px solid rgba(234, 179, 8, 0.4)',
+              transition: 'all 0.15s ease',
+              marginLeft: '0.25rem',
+            }}
+          >
+            🛡️ Admin
+          </Link>
+        )}
       </nav>
 
       {/* Right side */}
@@ -163,10 +196,7 @@ export default function NavbarClient({ initialUser }: NavbarClientProps) {
                   <p style={{ fontSize: '0.75rem', color: '#7C9283', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.email}</p>
                 </div>
 
-                {[
-                  { href: '/profile', label: 'Profile', icon: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z' },
-                  { href: '/theses/upload', label: 'Upload Thesis', icon: 'M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12' },
-                ].map(item => (
+                {menuItems.map(item => (
                   <Link
                     key={item.href}
                     href={item.href}

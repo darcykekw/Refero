@@ -107,6 +107,11 @@ export interface Database {
           pdf_file: string
           view_count: number
           ss_paper_id: string | null
+          status?: 'pending' | 'verified' | 'rejected'
+          verified_at?: string | null
+          verified_by?: string | null
+          grade_sheet_file?: string
+          rejection_reason?: string | null
           date_added: string
           date_modified: string
         }
@@ -124,6 +129,11 @@ export interface Database {
           pdf_file?: string
           view_count?: number
           ss_paper_id?: string | null
+          status?: 'pending' | 'verified' | 'rejected'
+          verified_at?: string | null
+          verified_by?: string | null
+          grade_sheet_file?: string
+          rejection_reason?: string | null
           date_added?: string
           date_modified?: string
         }
@@ -141,6 +151,11 @@ export interface Database {
           pdf_file?: string
           view_count?: number
           ss_paper_id?: string | null
+          status?: 'pending' | 'verified' | 'rejected'
+          verified_at?: string | null
+          verified_by?: string | null
+          grade_sheet_file?: string
+          rejection_reason?: string | null
           date_added?: string
           date_modified?: string
         }
@@ -191,6 +206,60 @@ export interface Database {
           },
         ]
       }
+      user_roles: {
+        Row: {
+          user_id: string
+          role: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          user_id: string
+          role?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          user_id?: string
+          role?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      audit_logs: {
+        Row: {
+          id: string
+          admin_id: string | null
+          admin_name: string
+          action: string
+          target_type: string
+          target_id: string
+          details: Record<string, unknown>
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          admin_id?: string | null
+          admin_name?: string
+          action: string
+          target_type: string
+          target_id?: string
+          details?: Record<string, unknown>
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          admin_id?: string | null
+          admin_name?: string
+          action?: string
+          target_type?: string
+          target_id?: string
+          details?: Record<string, unknown>
+          created_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: Record<string, never>
     Functions: {
@@ -217,6 +286,9 @@ export type College = Database['public']['Tables']['colleges']['Row']
 export type Program = Database['public']['Tables']['programs']['Row']
 export type Tag     = Database['public']['Tables']['tags']['Row']
 export type Thesis  = Database['public']['Tables']['theses']['Row']
+export type UserRole = Database['public']['Tables']['user_roles']['Row']
+export type AuditLog = Database['public']['Tables']['audit_logs']['Row']
+export type ThesisStatus = 'pending' | 'verified' | 'rejected'
 
 /** Thesis with its related college, program, and tags joined */
 export interface ThesisWithRelations extends Thesis {
