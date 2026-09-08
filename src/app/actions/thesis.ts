@@ -152,13 +152,13 @@ export async function uploadThesis(
     } catch {
       user = null
     }
-    if (!user) return { error: 'You must be signed in to upload a thesis.' }
+    const userId = user?.id || '00000000-0000-0000-0000-000000000000'
 
     const fields = parseFormFields(formData)
     const validationError = validateFields(fields, true)
     if (validationError) return { error: validationError }
 
-    const uploadResult = await uploadPdf(user.id, fields.pdfFile!)
+    const uploadResult = await uploadPdf(userId, fields.pdfFile!)
     if ('error' in uploadResult) return { error: uploadResult.error }
 
     // Ensure college and program records exist in DB if tables are present
@@ -201,7 +201,7 @@ export async function uploadThesis(
           program_id:     fields.programId,
           panel_score:    fields.panelScoreStr ? parseFloat(fields.panelScoreStr) : null,
           pdf_file:       uploadResult.path,
-          uploaded_by:    user.id,
+          uploaded_by:    userId,
           view_count:     0,
         })
         .select('id')
@@ -239,7 +239,7 @@ export async function uploadThesis(
         program_id: fields.programId,
         panel_score: fields.panelScoreStr ? parseFloat(fields.panelScoreStr) : null,
         pdf_file: uploadResult.path,
-        uploaded_by: user.id,
+        uploaded_by: userId,
         view_count: 0,
         ss_paper_id: null,
         status: 'pending',

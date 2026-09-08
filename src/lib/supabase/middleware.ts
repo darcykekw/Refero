@@ -1,14 +1,13 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
-/** Route trees that require a signed-in user. `/` is handled separately. */
-const PROTECTED_ROOTS = ['/theses', '/profile', '/bookmarks']
+/** Route trees that require a signed-in user. */
+const PROTECTED_ROOTS = ['/profile', '/bookmarks']
 
 /** Pages that make no sense to a user who is already signed in. */
 const AUTH_PAGES = ['/login', '/register']
 
 function isProtectedPath(pathname: string): boolean {
-  if (pathname === '/') return true
   return PROTECTED_ROOTS.some(
     root => pathname === root || pathname.startsWith(`${root}/`)
   )

@@ -17,7 +17,6 @@ export const metadata: Metadata = {
 
 export default async function UploadPage() {
   const user = await getCurrentUser().catch(() => null)
-  if (!user) redirect('/login?redirectTo=/theses/upload')
 
   const [colleges, programs, tags] = await Promise.all([
     getAllColleges().catch(() => DEFAULT_COLLEGES),
