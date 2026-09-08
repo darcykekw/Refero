@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { Suspense } from 'react'
 import { getCurrentUser } from '@/lib/auth'
 import { getUserTheses, getUserStats } from '@/lib/data'
+import { getBookmarkedTheses } from '@/lib/bookmarks'
 import ThesisCard from '@/components/ThesisCard'
 import UpdateNameForm from '@/components/UpdateNameForm'
 
@@ -21,9 +22,10 @@ export default async function ProfilePage() {
     user.email?.split('@')[0] ||
     'User'
 
-  const [theses, stats] = await Promise.all([
+  const [theses, stats, bookmarkData] = await Promise.all([
     getUserTheses(user.id),
     getUserStats(user.id),
+    getBookmarkedTheses(user.id),
   ])
 
   return (
@@ -57,6 +59,12 @@ export default async function ProfilePage() {
               <p className="text-xl sm:text-2xl font-bold text-slate-800">{stats.totalViews.toLocaleString()}</p>
               <p className="text-xs text-slate-400 mt-0.5">Total views</p>
             </div>
+            <Link href="/bookmarks" style={{ textDecoration: 'none' }}>
+              <p className="text-xl sm:text-2xl font-bold text-emerald-800 hover:text-emerald-950 transition-colors">
+                {bookmarkData.totalCount}
+              </p>
+              <p className="text-xs text-slate-400 mt-0.5">Bookmarks</p>
+            </Link>
             {stats.avgScore != null && (
               <div>
                 <p className="text-xl sm:text-2xl font-bold text-sky-600">{stats.avgScore.toFixed(1)}</p>
@@ -86,9 +94,14 @@ export default async function ProfilePage() {
             )}
           </div>
         </div>
-        <Link href="/theses/upload" className="btn btn-primary btn-sm">
-          + Upload thesis
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link href="/bookmarks" className="btn btn-ghost btn-sm">
+            My Bookmarks →
+          </Link>
+          <Link href="/theses/upload" className="btn btn-primary btn-sm">
+            + Upload thesis
+          </Link>
+        </div>
       </div>
 
       {/* Thesis grid */}
