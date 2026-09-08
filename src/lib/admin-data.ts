@@ -2,6 +2,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentUser, isAdminUser } from '@/lib/auth'
 import type { ThesisWithRelations, Program, Tag, AuditLog } from '@/types/database'
+import { DEFAULT_PROGRAMS, getProgramLogoUrl } from '@/lib/constants/programs'
 
 export interface AdminStats {
   totalTheses: number
@@ -76,34 +77,29 @@ export async function getAdminStats(): Promise<AdminStats> {
   }
 
   // 3. Programs and distribution
-  const { data: programsData } = await adminClient
-    .from('programs')
-    .select('id, prog_name, logo')
-    .order('prog_name')
+  let programs: { id: string; prog_name: string; logo?: string | null }[] = []
+  try {
+    const { data: programsData } = await adminClient
+      .from('programs')
+      .select('id, prog_name, logo')
+      .order('prog_name')
+    if (programsData && programsData.length > 0) {
+      programs = programsData
+    }
+  } catch (err) {
+    console.warn('admin programs query failed, falling back to default programs:', err)
+  }
 
-  const programs = programsData ?? []
+  if (programs.length === 0) {
+    programs = DEFAULT_PROGRAMS
+  }
 
   const programDistribution = programs.map(p => {
     const programTheses = theses.filter(t => t.program_id === p.id)
     const submittedCount = programTheses.length
     const verifiedCount = programTheses.filter(t => t.status === 'verified' || !t.status).length
 
-    // Known logo fallback based on program name if p.logo is not set
-    let logoFile = p.logo
-    if (!logoFile) {
-      const nameLower = (p.prog_name || '').toLowerCase()
-      if (nameLower.includes('marine')) logoFile = 'MBS-LOGO.png'
-      else if (nameLower.includes('computer')) logoFile = 'ACS-LOGO.png'
-      else if (nameLower.includes('information')) logoFile = 'SITE-LOGO.png'
-      else if (nameLower.includes('environmental')) logoFile = 'ESSA-LOGO.png'
-      else if (nameLower.includes('biology')) logoFile = 'YBA-LOGO.png'
-    }
-
-    const logoUrl = logoFile
-      ? logoFile.startsWith('/') || logoFile.startsWith('http')
-        ? logoFile
-        : `/images/${logoFile}`
-      : null
+    const logoUrl = getProgramLogoUrl(p.logo, p.prog_name)
 
     return {
       programId: p.id,

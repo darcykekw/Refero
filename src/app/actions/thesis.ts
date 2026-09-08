@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { THESIS_PDF_BUCKET } from '@/lib/storage'
 import { getPaperId } from '@/lib/semantic-scholar'
+import { DEFAULT_COLLEGES, DEFAULT_PROGRAMS } from '@/lib/constants/programs'
 
 export interface ThesisActionState {
   error?: string
@@ -142,6 +143,29 @@ export async function uploadThesis(
 
   const uploadResult = await uploadPdf(user.id, fields.pdfFile!)
   if ('error' in uploadResult) return { error: uploadResult.error }
+
+  // Ensure college and program records exist in DB if tables are present
+  try {
+    const admin = createAdminClient()
+    const selectedCollege = DEFAULT_COLLEGES.find(c => c.id === fields.collegeId)
+    if (selectedCollege) {
+      await admin.from('colleges').upsert({
+        id: selectedCollege.id,
+        college_name: selectedCollege.college_name,
+      }, { onConflict: 'id' })
+    }
+    const selectedProgram = DEFAULT_PROGRAMS.find(p => p.id === fields.programId)
+    if (selectedProgram) {
+      await admin.from('programs').upsert({
+        id: selectedProgram.id,
+        prog_name: selectedProgram.prog_name,
+        college_id: selectedProgram.college_id,
+        logo: selectedProgram.logo,
+      }, { onConflict: 'id' })
+    }
+  } catch {
+    // Non-fatal if tables do not exist
+  }
 
   // Insert the thesis. The schema type now resolves properly, so these values
   // are checked against the `theses` Insert type rather than cast to `never`.

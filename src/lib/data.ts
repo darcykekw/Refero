@@ -143,26 +143,45 @@ export const getFeaturedTheses = cache(async (programId?: string): Promise<Thesi
 
 // ── Colleges & programs (for filters and form pickers) ───────────────────────
 
+import { DEFAULT_COLLEGES, DEFAULT_PROGRAMS, getProgramLogoUrl } from '@/lib/constants/programs'
+
 export const getAllColleges = cache(async (): Promise<College[]> => {
-  const supabase = await createClient()
-  const { data } = await runWithRetry(() =>
-    supabase
-      .from('colleges')
-      .select('*')
-      .order('college_name')
-  )
-  return data ?? []
+  try {
+    const supabase = await createClient()
+    const { data, error } = await runWithRetry(() =>
+      supabase
+        .from('colleges')
+        .select('*')
+        .order('college_name')
+    )
+    if (!error && data && data.length > 0) {
+      return data
+    }
+  } catch (err) {
+    console.warn('getAllColleges DB query fallback to College of Sciences:', err)
+  }
+  return DEFAULT_COLLEGES
 })
 
 export const getAllPrograms = cache(async (): Promise<Program[]> => {
-  const supabase = await createClient()
-  const { data } = await runWithRetry(() =>
-    supabase
-      .from('programs')
-      .select('*')
-      .order('prog_name')
-  )
-  return data ?? []
+  try {
+    const supabase = await createClient()
+    const { data, error } = await runWithRetry(() =>
+      supabase
+        .from('programs')
+        .select('*')
+        .order('prog_name')
+    )
+    if (!error && data && data.length > 0) {
+      return data.map(p => ({
+        ...p,
+        logo: getProgramLogoUrl(p.logo, p.prog_name),
+      }))
+    }
+  } catch (err) {
+    console.warn('getAllPrograms DB query fallback to College of Sciences programs:', err)
+  }
+  return DEFAULT_PROGRAMS
 })
 
 // ── Theses listing (search + tags + pagination) ───────────────────────────────

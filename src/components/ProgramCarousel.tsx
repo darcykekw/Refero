@@ -4,6 +4,7 @@ import Image from 'next/image'
 import { useRef, useState, useEffect, useCallback, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import type { Program } from '@/types/database'
+import { DEFAULT_PROGRAMS, getProgramLogoUrl } from '@/lib/constants/programs'
 
 interface ProgramCarouselProps {
   programs: Program[]
@@ -67,9 +68,11 @@ export default function ProgramCarousel({ programs, activeProgramId }: ProgramCa
   const slideGap = isMobile ? '1rem' : '1.5rem'
   const centreOffsetPct = (100 - slideWidthPct) / 2
 
+  const effectivePrograms = programs && programs.length > 0 ? programs : DEFAULT_PROGRAMS
+
   const items: CarouselItem[] = useMemo(
-    () => [{ id: null, prog_name: 'All Programs', logo: '' }, ...programs],
-    [programs]
+    () => [{ id: null, prog_name: 'All Programs', logo: '' }, ...effectivePrograms],
+    [effectivePrograms]
   )
 
   const [userEngaged, setUserEngaged] = useState(false)
@@ -336,9 +339,9 @@ export default function ProgramCarousel({ programs, activeProgramId }: ProgramCa
                     <svg className="h-8 w-8 sm:h-12 sm:w-12 text-emerald-200/90" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
                     </svg>
-                  ) : prog.logo ? (
+                  ) : prog.logo || prog.prog_name ? (
                     <Image
-                      src={`/images/${prog.logo}`}
+                      src={getProgramLogoUrl(prog.logo, prog.prog_name)}
                       alt={prog.prog_name}
                       width={80}
                       height={80}

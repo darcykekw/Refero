@@ -3,6 +3,7 @@
 import { useActionState, useState } from 'react'
 import type { College, Program, Tag, ThesisWithRelations } from '@/types/database'
 import type { ThesisActionState } from '@/app/actions/thesis'
+import { DEFAULT_COLLEGES, DEFAULT_PROGRAMS } from '@/lib/constants/programs'
 
 type ActionFn = (prev: ThesisActionState, formData: FormData) => Promise<ThesisActionState>
 
@@ -30,10 +31,16 @@ export default function ThesisFormClient({
 }: ThesisFormClientProps) {
   const [state, formAction, pending] = useActionState<ThesisActionState, FormData>(action, {})
 
-  const [selectedCollegeId, setSelectedCollegeId] = useState(initialData?.college_id ?? '')
+  const effectiveColleges = colleges && colleges.length > 0 ? colleges : DEFAULT_COLLEGES
+  const effectivePrograms = programs && programs.length > 0 ? programs : DEFAULT_PROGRAMS
+
+  const initialCollegeId = initialData?.college_id || (effectiveColleges.length === 1 ? effectiveColleges[0].id : '')
+  const [selectedCollegeId, setSelectedCollegeId] = useState(initialCollegeId)
   const [selectedProgramId, setSelectedProgramId] = useState(initialData?.program_id ?? '')
 
-  const filteredPrograms = programs.filter(p => p.college_id === selectedCollegeId)
+  const filteredPrograms = effectivePrograms.filter(
+    p => !selectedCollegeId || p.college_id === selectedCollegeId || effectiveColleges.length === 1
+  )
   const hasNoPrograms = selectedCollegeId !== '' && filteredPrograms.length === 0
 
   const existingTagIds = new Set(initialData?.tags.map(t => t.id) ?? [])
@@ -169,7 +176,7 @@ export default function ThesisFormClient({
             className="input"
           >
             <option value="">Select a college…</option>
-            {colleges.map(c => (
+            {effectiveColleges.map(c => (
               <option key={c.id} value={c.id}>{c.college_name}</option>
             ))}
           </select>
