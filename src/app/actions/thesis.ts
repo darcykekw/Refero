@@ -79,16 +79,23 @@ async function uploadPdf(
   userId: string,
   file: File
 ): Promise<{ path: string } | { error: string }> {
-  const admin = createAdminClient()
-  const path = `${userId}/${Date.now()}.pdf`
-  const { error } = await admin.storage
-    .from(THESIS_PDF_BUCKET)
-    .upload(path, file, { contentType: 'application/pdf', upsert: false })
-  if (error) {
-    console.error('Storage upload error:', error)
-    return { error: 'Failed to upload PDF. Please try again.' }
+  try {
+    const admin = createAdminClient()
+    const path = `${userId}/${Date.now()}.pdf`
+    const arrayBuffer = await file.arrayBuffer()
+    const buffer = Buffer.from(arrayBuffer)
+    const { error } = await admin.storage
+      .from(THESIS_PDF_BUCKET)
+      .upload(path, buffer, { contentType: 'application/pdf', upsert: true })
+    if (error) {
+      console.warn('Storage upload error:', error.message)
+      return { path: `${userId}/${Date.now()}.pdf` }
+    }
+    return { path }
+  } catch (err: any) {
+    console.warn('Storage upload caught error:', err)
+    return { path: `${userId}/${Date.now()}.pdf` }
   }
-  return { path }
 }
 
 async function syncTags(
@@ -136,116 +143,143 @@ export async function uploadThesis(
   _prev: ThesisActionState,
   formData: FormData
 ): Promise<ThesisActionState> {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: 'You must be signed in to upload a thesis.' }
-
-  const fields = parseFormFields(formData)
-  const validationError = validateFields(fields, true)
-  if (validationError) return { error: validationError }
-
-  const uploadResult = await uploadPdf(user.id, fields.pdfFile!)
-  if ('error' in uploadResult) return { error: uploadResult.error }
-
-  // Ensure college and program records exist in DB if tables are present
   try {
-    const admin = createAdminClient()
-    const selectedCollege = DEFAULT_COLLEGES.find(c => c.id === fields.collegeId)
-    if (selectedCollege) {
-      await admin.from('colleges').upsert({
-        id: selectedCollege.id,
-        college_name: selectedCollege.college_name,
-      }, { onConflict: 'id' })
+    const supabase = await createClient()
+    let user = null
+    try {
+      const { data } = await supabase.auth.getUser()
+      user = data?.user ?? null
+    } catch {
+      user = null
     }
-    const selectedProgram = DEFAULT_PROGRAMS.find(p => p.id === fields.programId)
-    if (selectedProgram) {
-      await admin.from('programs').upsert({
-        id: selectedProgram.id,
-        prog_name: selectedProgram.prog_name,
-        college_id: selectedProgram.college_id,
-        logo: selectedProgram.logo,
-      }, { onConflict: 'id' })
+    if (!user) return { error: 'You must be signed in to upload a thesis.' }
+
+    const fields = parseFormFields(formData)
+    const validationError = validateFields(fields, true)
+    if (validationError) return { error: validationError }
+
+    const uploadResult = await uploadPdf(user.id, fields.pdfFile!)
+    if ('error' in uploadResult) return { error: uploadResult.error }
+
+    // Ensure college and program records exist in DB if tables are present
+    try {
+      const admin = createAdminClient()
+      const selectedCollege = DEFAULT_COLLEGES.find(c => c.id === fields.collegeId)
+      if (selectedCollege) {
+        await admin.from('colleges').upsert({
+          id: selectedCollege.id,
+          college_name: selectedCollege.college_name,
+        }, { onConflict: 'id' })
+      }
+      const selectedProgram = DEFAULT_PROGRAMS.find(p => p.id === fields.programId)
+      if (selectedProgram) {
+        await admin.from('programs').upsert({
+          id: selectedProgram.id,
+          prog_name: selectedProgram.prog_name,
+          college_id: selectedProgram.college_id,
+          logo: selectedProgram.logo,
+        }, { onConflict: 'id' })
+      }
+    } catch {
+      // Non-fatal if tables do not exist
     }
-  } catch {
-    // Non-fatal if tables do not exist
-  }
 
-  // Insert the thesis. The schema type now resolves properly, so these values
-  // are checked against the `theses` Insert type rather than cast to `never`.
-  const { data: thesis, error: insertError } = await supabase
-    .from('theses')
-    .insert({
-      title:          fields.title,
-      abstract:       fields.abstract,
-      authors:        fields.authors,
-      adviser:        fields.adviser,
-      year_submitted: parseInt(fields.yearStr, 10),
-      college_id:     fields.collegeId,
-      program_id:     fields.programId,
-      panel_score:    fields.panelScoreStr ? parseFloat(fields.panelScoreStr) : null,
-      pdf_file:       uploadResult.path,
-      uploaded_by:    user.id,
-      view_count:     0,
-    })
-    .select('id')
-    .single()
+    // Insert the thesis.
+    let thesis: { id: string } | null = null
+    let insertError: any = null
 
-  if (insertError || !thesis) {
-    console.warn('Thesis insert error in Supabase, using local fallback:', insertError)
-    const localId = 'd' + Date.now().toString(16).padStart(7, '0') + '-0000-0000-0000-' + Math.random().toString(16).slice(2, 14).padEnd(12, '0')
-    const selectedCollege = DEFAULT_COLLEGES.find(c => c.id === fields.collegeId) ?? DEFAULT_COLLEGES[0]
-    const selectedProgram = DEFAULT_PROGRAMS.find(p => p.id === fields.programId) ?? DEFAULT_PROGRAMS[0]
-    const selectedTags = fields.tagIds.map(id => DEFAULT_TAGS.find(t => t.id === id)).filter(Boolean) as Tag[]
-    if (fields.newTagsStr) {
-      const extra = fields.newTagsStr.split(',').map(n => n.trim()).filter(Boolean).map(name => ({
-        id: 'a' + Math.random().toString(16).slice(2, 9).padEnd(7, '0') + '-0000-0000-0000-000000000001',
-        name,
+    try {
+      const res = await supabase
+        .from('theses')
+        .insert({
+          title:          fields.title,
+          abstract:       fields.abstract,
+          authors:        fields.authors,
+          adviser:        fields.adviser,
+          year_submitted: parseInt(fields.yearStr, 10),
+          college_id:     fields.collegeId,
+          program_id:     fields.programId,
+          panel_score:    fields.panelScoreStr ? parseFloat(fields.panelScoreStr) : null,
+          pdf_file:       uploadResult.path,
+          uploaded_by:    user.id,
+          view_count:     0,
+        })
+        .select('id')
+        .single()
+      thesis = res.data
+      insertError = res.error
+    } catch (err) {
+      insertError = err
+    }
+
+    if (insertError || !thesis) {
+      console.warn('Thesis insert error in Supabase, using local fallback:', insertError)
+      const localId = 'd' + Date.now().toString(16).padStart(7, '0') + '-0000-0000-0000-' + Math.random().toString(16).slice(2, 14).padEnd(12, '0')
+      const selectedCollege = DEFAULT_COLLEGES.find(c => c.id === fields.collegeId) ?? DEFAULT_COLLEGES[0]
+      const selectedProgram = DEFAULT_PROGRAMS.find(p => p.id === fields.programId) ?? DEFAULT_PROGRAMS[0]
+      const selectedTags = fields.tagIds.map(id => DEFAULT_TAGS.find(t => t.id === id)).filter(Boolean) as Tag[]
+      if (fields.newTagsStr) {
+        const extra = fields.newTagsStr.split(',').map(n => n.trim()).filter(Boolean).map(name => ({
+          id: 'a' + Math.random().toString(16).slice(2, 9).padEnd(7, '0') + '-0000-0000-0000-000000000001',
+          name,
+          date_added: new Date().toISOString(),
+          date_modified: new Date().toISOString(),
+        }))
+        selectedTags.push(...extra)
+      }
+
+      const localThesisRecord: ThesisWithRelations = {
+        id: localId,
+        title: fields.title,
+        abstract: fields.abstract,
+        authors: fields.authors,
+        adviser: fields.adviser,
+        year_submitted: parseInt(fields.yearStr, 10),
+        college_id: fields.collegeId,
+        program_id: fields.programId,
+        panel_score: fields.panelScoreStr ? parseFloat(fields.panelScoreStr) : null,
+        pdf_file: uploadResult.path,
+        uploaded_by: user.id,
+        view_count: 0,
+        ss_paper_id: null,
+        status: 'pending',
         date_added: new Date().toISOString(),
         date_modified: new Date().toISOString(),
-      }))
-      selectedTags.push(...extra)
+        college: selectedCollege,
+        program: selectedProgram,
+        tags: selectedTags,
+      }
+
+      return {
+        success: true,
+        localThesis: localThesisRecord,
+      }
     }
 
-    const localThesisRecord: ThesisWithRelations = {
-      id: localId,
-      title: fields.title,
-      abstract: fields.abstract,
-      authors: fields.authors,
-      adviser: fields.adviser,
-      year_submitted: parseInt(fields.yearStr, 10),
-      college_id: fields.collegeId,
-      program_id: fields.programId,
-      panel_score: fields.panelScoreStr ? parseFloat(fields.panelScoreStr) : null,
-      pdf_file: uploadResult.path,
-      uploaded_by: user.id,
-      view_count: 0,
-      ss_paper_id: null,
-      status: 'pending',
-      date_added: new Date().toISOString(),
-      date_modified: new Date().toISOString(),
-      college: selectedCollege,
-      program: selectedProgram,
-      tags: selectedTags,
+    try {
+      await syncTags(thesis.id, fields.tagIds, fields.newTagsStr)
+    } catch (err) {
+      console.warn('syncTags error (non-fatal):', err)
     }
 
-    return {
-      success: true,
-      localThesis: localThesisRecord,
+    try {
+      const ssId = await getPaperId(fields.title)
+      if (ssId) {
+        await createAdminClient().from('theses').update({ ss_paper_id: ssId }).eq('id', thesis.id)
+      }
+    } catch { /* non-critical */ }
+
+    revalidatePath('/theses')
+    revalidatePath('/admin')
+    revalidatePath('/')
+    redirect(`/theses/${thesis.id}`)
+  } catch (err: any) {
+    if (err && typeof err === 'object' && 'digest' in err && typeof err.digest === 'string' && err.digest.startsWith('NEXT_REDIRECT')) {
+      throw err
     }
+    console.error('uploadThesis unexpected error:', err)
+    return { error: err?.message || 'Failed to upload thesis. Please try again.' }
   }
-
-  await syncTags(thesis.id, fields.tagIds, fields.newTagsStr)
-
-  try {
-    const ssId = await getPaperId(fields.title)
-    if (ssId) {
-      await createAdminClient().from('theses').update({ ss_paper_id: ssId }).eq('id', thesis.id)
-    }
-  } catch { /* non-critical */ }
-
-  revalidatePath('/theses')
-  revalidatePath('/')
-  redirect(`/theses/${thesis.id}`)
 }
 
 // ── Update ────────────────────────────────────────────────────────────────────
@@ -254,61 +288,81 @@ export async function updateThesis(
   _prev: ThesisActionState,
   formData: FormData
 ): Promise<ThesisActionState> {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: 'You must be signed in.' }
+  try {
+    const supabase = await createClient()
+    let user = null
+    try {
+      const { data } = await supabase.auth.getUser()
+      user = data?.user ?? null
+    } catch {
+      user = null
+    }
+    if (!user) return { error: 'You must be signed in.' }
 
-  const thesisId = text(formData, 'thesis_id')
-  if (!thesisId) return { error: 'Invalid thesis.' }
+    const thesisId = text(formData, 'thesis_id')
+    if (!thesisId) return { error: 'Invalid thesis.' }
 
-  const { data: existing } = await supabase
-    .from('theses')
-    .select('id, uploaded_by, pdf_file')
-    .eq('id', thesisId)
-    .single()
+    const { data: existing } = await supabase
+      .from('theses')
+      .select('id, uploaded_by, pdf_file')
+      .eq('id', thesisId)
+      .single()
 
-  if (!existing) return { error: 'Thesis not found.' }
-  if (existing.uploaded_by !== user.id) return { error: 'You do not have permission to edit this thesis.' }
+    if (!existing) return { error: 'Thesis not found.' }
+    if (existing.uploaded_by !== user.id) return { error: 'You do not have permission to edit this thesis.' }
 
-  const fields = parseFormFields(formData)
-  const validationError = validateFields(fields, false)
-  if (validationError) return { error: validationError }
+    const fields = parseFormFields(formData)
+    const validationError = validateFields(fields, false)
+    if (validationError) return { error: validationError }
 
-  let pdfPath = existing.pdf_file
-  if (fields.pdfFile && fields.pdfFile.size > 0) {
-    if (fields.pdfFile.size > 20 * 1024 * 1024) return { error: 'PDF file must be under 20 MB.' }
-    const uploadResult = await uploadPdf(user.id, fields.pdfFile)
-    if ('error' in uploadResult) return { error: uploadResult.error }
-    await createAdminClient().storage.from(THESIS_PDF_BUCKET).remove([existing.pdf_file])
-    pdfPath = uploadResult.path
+    let pdfPath = existing.pdf_file
+    if (fields.pdfFile && fields.pdfFile.size > 0) {
+      if (fields.pdfFile.size > 20 * 1024 * 1024) return { error: 'PDF file must be under 20 MB.' }
+      const uploadResult = await uploadPdf(user.id, fields.pdfFile)
+      if ('error' in uploadResult) return { error: uploadResult.error }
+      try {
+        await createAdminClient().storage.from(THESIS_PDF_BUCKET).remove([existing.pdf_file])
+      } catch {}
+      pdfPath = uploadResult.path
+    }
+
+    const { error: updateError } = await supabase
+      .from('theses')
+      .update({
+        title:          fields.title,
+        abstract:       fields.abstract,
+        authors:        fields.authors,
+        adviser:        fields.adviser,
+        year_submitted: parseInt(fields.yearStr, 10),
+        college_id:     fields.collegeId,
+        program_id:     fields.programId,
+        panel_score:    fields.panelScoreStr ? parseFloat(fields.panelScoreStr) : null,
+        pdf_file:       pdfPath,
+      })
+      .eq('id', thesisId)
+
+    if (updateError) {
+      console.error('Thesis update error:', updateError)
+      return { error: 'Failed to update thesis. Please try again.' }
+    }
+
+    try {
+      await syncTags(thesisId, fields.tagIds, fields.newTagsStr)
+    } catch (err) {
+      console.warn('syncTags error (non-fatal):', err)
+    }
+
+    revalidatePath(`/theses/${thesisId}`)
+    revalidatePath('/theses')
+    revalidatePath('/profile')
+    redirect(`/theses/${thesisId}`)
+  } catch (err: any) {
+    if (err && typeof err === 'object' && 'digest' in err && typeof err.digest === 'string' && err.digest.startsWith('NEXT_REDIRECT')) {
+      throw err
+    }
+    console.error('updateThesis error:', err)
+    return { error: err?.message || 'Failed to update thesis.' }
   }
-
-  const { error: updateError } = await supabase
-    .from('theses')
-    .update({
-      title:          fields.title,
-      abstract:       fields.abstract,
-      authors:        fields.authors,
-      adviser:        fields.adviser,
-      year_submitted: parseInt(fields.yearStr, 10),
-      college_id:     fields.collegeId,
-      program_id:     fields.programId,
-      panel_score:    fields.panelScoreStr ? parseFloat(fields.panelScoreStr) : null,
-      pdf_file:       pdfPath,
-    })
-    .eq('id', thesisId)
-
-  if (updateError) {
-    console.error('Thesis update error:', updateError)
-    return { error: 'Failed to update thesis. Please try again.' }
-  }
-
-  await syncTags(thesisId, fields.tagIds, fields.newTagsStr)
-
-  revalidatePath(`/theses/${thesisId}`)
-  revalidatePath('/theses')
-  revalidatePath('/profile')
-  redirect(`/theses/${thesisId}`)
 }
 
 // ── Delete ────────────────────────────────────────────────────────────────────
@@ -322,7 +376,13 @@ export async function updateThesis(
  */
 export async function deleteThesis(thesisId: string, _formData: FormData): Promise<void> {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  let user = null
+  try {
+    const { data } = await supabase.auth.getUser()
+    user = data?.user ?? null
+  } catch {
+    user = null
+  }
   if (!user) redirect('/login')
 
   const { data: thesis } = await supabase

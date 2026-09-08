@@ -57,13 +57,19 @@ export default function ThesisUploadError({
           We encountered an issue preparing the thesis submission form. Please try reloading or return to the theses repository.
         </p>
 
-        <div style={{ display: 'flex', justifyContent: 'center', gap: '0.75rem', paddingTop: '0.5rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'center', gap: '0.75rem', paddingTop: '0.5rem', flexWrap: 'wrap' }}>
           <button
             onClick={() => reset()}
             className="btn btn-primary btn-sm"
           >
             Try Again
           </button>
+          <Link
+            href="/login?redirectTo=/theses/upload"
+            className="btn btn-secondary btn-sm"
+          >
+            Sign In
+          </Link>
           <Link
             href="/theses"
             className="btn btn-ghost btn-sm"

@@ -31,11 +31,17 @@ export default function ThesisFormClient({
 }: ThesisFormClientProps) {
   const [state, formAction, pending] = useActionState<ThesisActionState, FormData>(action, {})
 
-  const effectiveColleges = colleges && colleges.length > 0 ? colleges : DEFAULT_COLLEGES
-  const effectivePrograms = programs && programs.length > 0 ? programs : DEFAULT_PROGRAMS
-  const effectiveTags = tags && tags.length > 0 ? tags : DEFAULT_TAGS
+  const effectiveColleges = (colleges && colleges.length > 0 ? colleges : DEFAULT_COLLEGES).filter(
+    (c): c is College => Boolean(c && c.id && c.college_name)
+  )
+  const effectivePrograms = (programs && programs.length > 0 ? programs : DEFAULT_PROGRAMS).filter(
+    (p): p is Program => Boolean(p && p.id && p.prog_name)
+  )
+  const effectiveTags = (tags && tags.length > 0 ? tags : DEFAULT_TAGS).filter(
+    (t): t is Tag => Boolean(t && t.id && t.name)
+  )
 
-  const initialCollegeId = initialData?.college_id || (effectiveColleges.length === 1 ? effectiveColleges[0].id : '')
+  const initialCollegeId = initialData?.college_id || (effectiveColleges.length > 0 ? effectiveColleges[0].id : '')
   const [selectedCollegeId, setSelectedCollegeId] = useState(initialCollegeId)
   const [selectedProgramId, setSelectedProgramId] = useState(initialData?.program_id ?? '')
 
@@ -45,7 +51,9 @@ export default function ThesisFormClient({
   const hasNoPrograms = selectedCollegeId !== '' && filteredPrograms.length === 0
 
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>(() => {
-    return initialData?.tags?.map(t => t.id) ?? []
+    return (initialData?.tags ?? [])
+      .map(t => (t && typeof t === 'object' && 'id' in t ? t.id : ''))
+      .filter(Boolean)
   })
 
   useEffect(() => {
@@ -296,7 +304,7 @@ export default function ThesisFormClient({
           >
             <option value="">Select an existing tag to add…</option>
             {effectiveTags
-              .filter(t => !selectedTagIds.includes(t.id))
+              .filter(t => t && t.id && !selectedTagIds.includes(t.id))
               .map(t => (
                 <option key={t.id} value={t.id}>
                   {t.name}

@@ -8,6 +8,8 @@ import { getBookmarkedTheses } from '@/lib/bookmarks'
 import ThesisCard from '@/components/ThesisCard'
 import UpdateNameForm from '@/components/UpdateNameForm'
 
+export const dynamic = 'force-dynamic'
+
 export const metadata: Metadata = {
   title: 'My Profile',
   description: 'Your thesis uploads and account settings.',

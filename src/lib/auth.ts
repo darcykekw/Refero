@@ -15,9 +15,20 @@ import { createClient } from '@/lib/supabase/server'
  * request, so they collapse into one.
  */
 export const getCurrentUser = cache(async (): Promise<User | null> => {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  return user
+  try {
+    const supabase = await createClient()
+    const { data, error } = await supabase.auth.getUser()
+    if (error || !data) {
+      return null
+    }
+    return data.user ?? null
+  } catch (err: any) {
+    if (err && typeof err === 'object' && 'digest' in err && err.digest === 'DYNAMIC_SERVER_USAGE') {
+      throw err
+    }
+    console.warn('getCurrentUser caught error, returning null:', err)
+    return null
+  }
 })
 
 export const ADMIN_EMAILS = ['202380256@psu.palawan.edu.ph']

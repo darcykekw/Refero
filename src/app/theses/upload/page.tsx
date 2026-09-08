@@ -16,7 +16,7 @@ export const metadata: Metadata = {
 }
 
 export default async function UploadPage() {
-  const user = await getCurrentUser()
+  const user = await getCurrentUser().catch(() => null)
   if (!user) redirect('/login?redirectTo=/theses/upload')
 
   const [colleges, programs, tags] = await Promise.all([
@@ -24,6 +24,10 @@ export default async function UploadPage() {
     getAllPrograms().catch(() => DEFAULT_PROGRAMS),
     getAvailableTags(100).catch(() => DEFAULT_TAGS),
   ])
+
+  const safeColleges = colleges && colleges.length > 0 ? colleges : DEFAULT_COLLEGES
+  const safePrograms = programs && programs.length > 0 ? programs : DEFAULT_PROGRAMS
+  const safeTags = tags && tags.length > 0 ? tags : DEFAULT_TAGS
 
   return (
     <div className="max-w-3xl page-gutter py-10 space-y-6">
@@ -46,9 +50,9 @@ export default async function UploadPage() {
       <div className="card p-6 sm:p-8">
         <Suspense>
           <ThesisFormClient
-            colleges={colleges}
-            programs={programs}
-            tags={tags}
+            colleges={safeColleges}
+            programs={safePrograms}
+            tags={safeTags}
             action={uploadThesis}
             mode="upload"
           />
