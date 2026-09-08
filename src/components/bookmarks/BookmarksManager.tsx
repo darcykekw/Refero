@@ -455,9 +455,6 @@ export default function BookmarksManager({
               <span style={{ fontSize: '0.875rem', fontWeight: 700, letterSpacing: '0.02em' }}>
                 REFERO RESEARCH LIBRARY
               </span>
-              <span style={{ fontSize: '0.75rem', color: '#8FA885', marginLeft: '0.5rem' }}>
-                • Zotero Collections
-              </span>
             </div>
           </div>
 
@@ -896,7 +893,7 @@ export default function BookmarksManager({
                   <button
                     type="button"
                     onClick={() => setViewMode('list')}
-                    title="Zotero List View"
+                    title="List View"
                     style={{
                       padding: '4px 8px',
                       borderRadius: '4px',
@@ -1232,7 +1229,7 @@ export default function BookmarksManager({
                       {/* Inspector Header */}
                       <div style={{ borderBottom: '1px solid #E5ECE6', paddingBottom: '0.75rem' }}>
                         <span style={{ fontSize: '0.6875rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#7C9283' }}>
-                          Item Details (Zotero View)
+                          Item Details
                         </span>
                         <h4
                           style={{
@@ -1531,7 +1528,7 @@ export default function BookmarksManager({
             <form onSubmit={handleCreateSubmit}>
               <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid #E5ECE6' }}>
                 <h3 id="create-collection-title" style={{ fontSize: '1.125rem', fontWeight: 700, color: '#112117', fontFamily: "'Playfair Display', Georgia, serif" }}>
-                  New Zotero Collection
+                  New Collection
                 </h3>
                 <p style={{ fontSize: '0.75rem', color: '#7C9283', marginTop: '0.25rem' }}>
                   Create a collection folder to organize your research papers.
@@ -1813,7 +1810,7 @@ export default function BookmarksManager({
             </div>
 
             <h3 id="delete-collection-title" style={{ fontSize: '1.125rem', fontWeight: 700, color: '#112117' }}>
-              Delete Zotero Collection?
+              Delete Collection?
             </h3>
             <p style={{ fontSize: '0.875rem', color: '#598567', marginTop: '0.5rem', lineHeight: 1.5 }}>
               Are you sure you want to delete <strong>&ldquo;{deletingCollection.name}&rdquo;</strong>? The theses in this collection will remain safe in your library and the university repository.
