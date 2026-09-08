@@ -30,9 +30,17 @@ export async function updateSession(request: NextRequest) {
     },
   })
 
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    console.warn('Supabase URL or Anon Key is missing from environment variables.')
+    return supabaseResponse
+  }
+
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    supabaseUrl,
+    supabaseAnonKey,
     {
       cookies: {
         getAll() {
@@ -55,10 +63,14 @@ export async function updateSession(request: NextRequest) {
     }
   )
 
-  // Refresh session — do not remove this line.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  // Refresh session — safely handle any network or token exceptions
+  let user = null
+  try {
+    const { data } = await supabase.auth.getUser()
+    user = data?.user ?? null
+  } catch (err) {
+    console.error('Failed to get user session in middleware:', err)
+  }
 
   function redirectWithCookies(url: URL | string) {
     const redirectRes = NextResponse.redirect(url)
