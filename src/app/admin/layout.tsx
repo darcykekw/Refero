@@ -41,6 +41,7 @@ export default async function AdminLayout({
         <AdminTopNav
           userEmail={user.email ?? '202380256@psu.palawan.edu.ph'}
           userName={user.user_metadata?.full_name || 'Admin'}
+          pendingCount={stats.pendingTheses}
         />
 
         <main className="flex-1 w-full mx-auto">

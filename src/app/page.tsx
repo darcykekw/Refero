@@ -36,10 +36,11 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   ]
 
   return (
-    <div className="max-w-7xl page-gutter py-10 space-y-16">
+    <div className="w-full max-w-7xl page-gutter py-6 sm:py-10 space-y-10 sm:space-y-16">
 
       {/* ── Hero ──────────────────────────────────────────────────────────── */}
       <header
+        className="w-full animate-scale-in"
         style={{
           position: 'relative',
           overflow: 'hidden',
@@ -84,30 +85,31 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           />
         </div>
 
-        <div style={{ position: 'relative', zIndex: 1, padding: '3.5rem 3.5rem 3rem' }}>
+        <div className="relative z-10 p-5 sm:p-10 lg:p-14">
           {/* Welcome tag */}
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'rgba(143,168,133,0.14)', border: '1px solid rgba(143,168,133,0.25)', borderRadius: 999, padding: '0.35rem 1rem', marginBottom: '1.5rem' }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'rgba(143,168,133,0.14)', border: '1px solid rgba(143,168,133,0.25)', borderRadius: 999, padding: '0.3rem 0.85rem', marginBottom: '1.25rem' }}>
             <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#8FA885', flexShrink: 0 }} />
-            <span style={{ fontSize: '0.75rem', fontWeight: 600, letterSpacing: '0.08em', color: '#A3C49B', textTransform: 'uppercase' }}>
+            <span style={{ fontSize: '0.6875rem', fontWeight: 600, letterSpacing: '0.08em', color: '#A3C49B', textTransform: 'uppercase' }} className="truncate max-w-[240px] sm:max-w-none">
               Welcome back Alchemist, {displayName}
             </span>
           </div>
 
-          <div style={{ maxWidth: 580, marginBottom: '2.25rem' }}>
-            <h1 style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 'clamp(2.5rem, 5.5vw, 3.75rem)', fontWeight: 800, lineHeight: 1.1, letterSpacing: '-0.02em', color: '#fff', marginBottom: '0.75rem' }}>
+          <div style={{ maxWidth: 580, marginBottom: '2rem' }}>
+            <h1 style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 'clamp(1.85rem, 6vw, 3.75rem)', fontWeight: 800, lineHeight: 1.1, letterSpacing: '-0.02em', color: '#fff', marginBottom: '0.75rem' }}>
               REFERO
               <br />
               <span style={{ color: '#9AB892', fontWeight: 700 }}>
                 Thesis Library
               </span>
             </h1>
-            <p style={{ fontSize: '1.0625rem', color: 'rgba(255,255,255,0.75)', lineHeight: 1.65, maxWidth: 520 }}>
+            <p style={{ fontSize: '0.9375rem', color: 'rgba(255,255,255,0.8)', lineHeight: 1.6, maxWidth: 520 }} className="sm:text-base">
               Discover, share, and explore scientific research and theses.
             </p>
-            <div style={{ marginTop: '1.75rem', display: 'flex', flexWrap: 'wrap', gap: '0.875rem' }}>
+            <div className="mt-6 flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
               <Link
                 href="/theses"
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '0.75rem 1.625rem', borderRadius: 8, background: 'linear-gradient(135deg, #265C3B, #1F4C30)', color: '#fff', fontWeight: 700, fontSize: '0.9375rem', textDecoration: 'none', border: '1px solid rgba(143,168,133,0.35)', boxShadow: '0 4px 16px rgba(13,36,24,0.35)', letterSpacing: '0.01em' }}
+                className="w-full sm:w-auto text-center"
+                style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '0.75rem 1.625rem', borderRadius: 8, background: 'linear-gradient(135deg, #265C3B, #1F4C30)', color: '#fff', fontWeight: 700, fontSize: '0.9375rem', textDecoration: 'none', border: '1px solid rgba(143,168,133,0.35)', boxShadow: '0 4px 16px rgba(13,36,24,0.35)', letterSpacing: '0.01em' }}
               >
                 Browse Theses
                 <svg style={{ width: 15, height: 15 }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -116,7 +118,8 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               </Link>
               <Link
                 href="/theses/upload"
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '0.75rem 1.625rem', borderRadius: 8, background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.85)', fontWeight: 600, fontSize: '0.9375rem', textDecoration: 'none', border: '1px solid rgba(143,168,133,0.22)', backdropFilter: 'blur(8px)', letterSpacing: '0.01em' }}
+                className="w-full sm:w-auto text-center"
+                style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '0.75rem 1.625rem', borderRadius: 8, background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.85)', fontWeight: 600, fontSize: '0.9375rem', textDecoration: 'none', border: '1px solid rgba(143,168,133,0.22)', backdropFilter: 'blur(8px)', letterSpacing: '0.01em' }}
               >
                 Upload Thesis
               </Link>
@@ -124,11 +127,11 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           </div>
 
           {/* Stat cards */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 150px))', gap: '1rem' }}>
+          <div className="grid grid-cols-3 gap-2 sm:gap-4 max-w-lg">
             {STATS.map(s => (
-              <div key={s.label} style={{ padding: '1rem 1.25rem', borderRadius: 12, background: 'rgba(255,255,255,0.05)', backdropFilter: 'blur(10px)', border: '1px solid rgba(143,168,133,0.15)', transition: 'background 0.2s' }}>
-                <p style={{ fontSize: '0.6875rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#8FA885', marginBottom: 4 }}>{s.label}</p>
-                <p style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: '2rem', fontWeight: 800, color: '#fff', lineHeight: 1 }}>{s.value.toLocaleString()}</p>
+              <div key={s.label} className="p-3 sm:p-4" style={{ borderRadius: 12, background: 'rgba(255,255,255,0.05)', backdropFilter: 'blur(10px)', border: '1px solid rgba(143,168,133,0.15)', transition: 'background 0.2s' }}>
+                <p style={{ fontSize: '0.625rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#8FA885', marginBottom: 2 }} className="sm:text-[0.6875rem] truncate">{s.label}</p>
+                <p style={{ fontFamily: "'Playfair Display', Georgia, serif", fontWeight: 800, color: '#fff', lineHeight: 1 }} className="text-xl sm:text-2xl lg:text-3xl">{s.value.toLocaleString()}</p>
               </div>
             ))}
           </div>
@@ -136,7 +139,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       </header>
 
       {/* ── Browse by Program ──────────────────────────────────────────────── */}
-      <section>
+      <section className="w-full animate-fade-in-up delay-150">
         <div className="section-header">
           <h2 className="section-title">Browse by Program</h2>
         </div>
@@ -146,7 +149,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       </section>
 
       {/* ── Featured Theses ────────────────────────────────────────────────── */}
-      <section>
+      <section className="w-full animate-fade-in-up delay-300">
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.75rem' }}>
           <div className="section-header" style={{ marginBottom: 0 }}>
             <h2 className="section-title">

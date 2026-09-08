@@ -27,7 +27,7 @@ export default async function ProfilePage() {
   ])
 
   return (
-    <div className="max-w-5xl page-gutter py-10 space-y-8">
+    <div className="w-full max-w-5xl page-gutter py-6 sm:py-10 space-y-6 sm:space-y-8">
 
       {/* Breadcrumb */}
       <nav className="breadcrumb-bar" aria-label="Breadcrumb">
@@ -37,29 +37,29 @@ export default async function ProfilePage() {
       </nav>
 
       {/* Profile header */}
-      <div className="card p-6 sm:p-8 space-y-6">
-        <div className="flex items-start justify-between flex-wrap gap-4">
+      <div className="card p-5 sm:p-8 space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
           <div>
             <p className="text-sm text-slate-400 mb-0.5">Signed in as</p>
-            <h1 className="text-2xl font-bold text-slate-900">{displayName}</h1>
-            <p className="text-sm text-slate-500 mt-0.5">{user.email}</p>
+            <h1 className="text-xl sm:text-2xl font-bold text-slate-900">{displayName}</h1>
+            <p className="text-sm text-slate-500 mt-0.5 truncate">{user.email}</p>
           </div>
 
           {/* Stats */}
-          <div className="flex gap-6 text-center">
+          <div className="flex gap-4 sm:gap-6 text-center w-full sm:w-auto justify-around sm:justify-end border-t sm:border-t-0 pt-3 sm:pt-0 border-slate-100">
             <div>
-              <p className="text-2xl font-bold text-slate-800">{stats.thesisCount}</p>
+              <p className="text-xl sm:text-2xl font-bold text-slate-800">{stats.thesisCount}</p>
               <p className="text-xs text-slate-400 mt-0.5">
                 {stats.thesisCount === 1 ? 'Thesis' : 'Theses'}
               </p>
             </div>
             <div>
-              <p className="text-2xl font-bold text-slate-800">{stats.totalViews.toLocaleString()}</p>
+              <p className="text-xl sm:text-2xl font-bold text-slate-800">{stats.totalViews.toLocaleString()}</p>
               <p className="text-xs text-slate-400 mt-0.5">Total views</p>
             </div>
             {stats.avgScore != null && (
               <div>
-                <p className="text-2xl font-bold text-sky-600">{stats.avgScore.toFixed(1)}</p>
+                <p className="text-xl sm:text-2xl font-bold text-sky-600">{stats.avgScore.toFixed(1)}</p>
                 <p className="text-xs text-slate-400 mt-0.5">Avg. score</p>
               </div>
             )}

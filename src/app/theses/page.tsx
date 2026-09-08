@@ -69,7 +69,7 @@ export default async function ThesesPage({ searchParams }: ThesesPageProps) {
   }
 
   return (
-    <div className="max-w-7xl page-gutter py-10 space-y-8">
+    <div className="w-full max-w-7xl page-gutter py-6 sm:py-10 space-y-6 sm:space-y-8">
 
       {/* Breadcrumb */}
       <nav className="breadcrumb-bar" aria-label="Breadcrumb">
@@ -185,7 +185,7 @@ export default async function ThesesPage({ searchParams }: ThesesPageProps) {
 
       {/* ── Pagination ───────────────────────────────────────────────── */}
       {totalPages > 1 && (
-        <nav aria-label="Thesis pagination" className="flex items-center justify-center gap-2">
+        <nav aria-label="Thesis pagination" className="flex flex-wrap items-center justify-center gap-2 pt-2">
           <Link
             href={buildUrl({ page: page > 1 ? String(page - 1) : null })}
             aria-disabled={page === 1}
