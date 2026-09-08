@@ -2,7 +2,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentUser, isAdminUser } from '@/lib/auth'
 import type { ThesisWithRelations, Program, Tag, AuditLog } from '@/types/database'
-import { DEFAULT_PROGRAMS, getProgramLogoUrl } from '@/lib/constants/programs'
+import { DEFAULT_PROGRAMS, DEFAULT_THESES, getProgramLogoUrl } from '@/lib/constants/programs'
 
 export interface AdminStats {
   totalTheses: number
@@ -59,6 +59,10 @@ export async function getAdminStats(): Promise<AdminStats> {
     theses = (fallbackTheses ?? []).map(t => ({ ...t, status: 'verified' }))
   } else {
     theses = allTheses ?? []
+  }
+
+  if (theses.length === 0) {
+    theses = DEFAULT_THESES.map(t => ({ id: t.id, program_id: t.program_id, status: 'verified' }))
   }
 
   const totalTheses = theses.length

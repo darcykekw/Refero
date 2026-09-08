@@ -61,18 +61,41 @@ export interface SiteStats {
 }
 
 export const getSiteStats = cache(async (): Promise<SiteStats> => {
-  const supabase = await createClient()
-  const [theses, colleges, programs, tags] = await Promise.all([
-    supabase.from('theses').select('id', { count: 'exact', head: true }),
-    supabase.from('colleges').select('id', { count: 'exact', head: true }),
-    supabase.from('programs').select('id', { count: 'exact', head: true }),
-    supabase.from('tags').select('id', { count: 'exact', head: true }),
-  ])
+  let thesisCount = DEFAULT_THESES.length
+  let collegeCount = DEFAULT_COLLEGES.length
+  let programCount = DEFAULT_PROGRAMS.length
+  let tagCount = DEFAULT_TAGS.length
+
+  try {
+    const supabase = await createClient()
+    const [theses, colleges, programs, tags] = await Promise.all([
+      supabase.from('theses').select('id', { count: 'exact', head: true }),
+      supabase.from('colleges').select('id', { count: 'exact', head: true }),
+      supabase.from('programs').select('id', { count: 'exact', head: true }),
+      supabase.from('tags').select('id', { count: 'exact', head: true }),
+    ])
+
+    if (theses.count != null && theses.count > 0) {
+      thesisCount = theses.count
+    }
+    if (colleges.count != null && colleges.count > 0) {
+      collegeCount = colleges.count
+    }
+    if (programs.count != null && programs.count > 0) {
+      programCount = programs.count
+    }
+    if (tags.count != null && tags.count > 0) {
+      tagCount = tags.count
+    }
+  } catch (err) {
+    console.warn('getSiteStats query fallback to defaults:', err)
+  }
+
   return {
-    thesis_count:  theses.count  ?? 0,
-    college_count: colleges.count ?? 0,
-    program_count: programs.count ?? 0,
-    tag_count:     tags.count    ?? 0,
+    thesis_count:  thesisCount,
+    college_count: collegeCount,
+    program_count: programCount,
+    tag_count:     tagCount,
   }
 })
 
@@ -100,50 +123,55 @@ function flattenTags(rows: ThesisJoinRow[]): ThesisWithRelations[] {
 // ── Featured theses (home page) ───────────────────────────────────────────────
 
 export const getFeaturedTheses = cache(async (programId?: string): Promise<ThesisWithRelations[]> => {
-  // If an invalid programId format is provided, return empty without querying DB
   if (programId && !isValidUUID(programId)) {
     return []
   }
 
-  const supabase = await createClient()
+  try {
+    const supabase = await createClient()
 
-  let query = supabase
-    .from('theses')
-    .select(`*, college:colleges(*), program:programs(*), tags:thesis_tags(tag:tags(*))`)
-    .or('status.eq.verified,status.is.null')
-    .order('date_added', { ascending: false })
-    .limit(6)
-
-  if (programId && isValidUUID(programId)) {
-    query = query.eq('program_id', programId)
-  }
-
-  let { data, error } = await runWithRetry(() => query)
-  if (error && (error as any).code === '42703') {
-    let fallbackQuery = supabase
+    let query = supabase
       .from('theses')
       .select(`*, college:colleges(*), program:programs(*), tags:thesis_tags(tag:tags(*))`)
+      .or('status.eq.verified,status.is.null')
       .order('date_added', { ascending: false })
       .limit(6)
+
     if (programId && isValidUUID(programId)) {
-      fallbackQuery = fallbackQuery.eq('program_id', programId)
+      query = query.eq('program_id', programId)
     }
-    const fallbackRes = await runWithRetry(() => fallbackQuery)
-    data = fallbackRes.data
-    error = fallbackRes.error
+
+    let { data, error } = await runWithRetry(() => query)
+    if (error && (error as any).code === '42703') {
+      let fallbackQuery = supabase
+        .from('theses')
+        .select(`*, college:colleges(*), program:programs(*), tags:thesis_tags(tag:tags(*))`)
+        .order('date_added', { ascending: false })
+        .limit(6)
+      if (programId && isValidUUID(programId)) {
+        fallbackQuery = fallbackQuery.eq('program_id', programId)
+      }
+      const fallbackRes = await runWithRetry(() => fallbackQuery)
+      data = fallbackRes.data
+      error = fallbackRes.error
+    }
+
+    if (!error && data && data.length > 0) {
+      return flattenTags(data)
+    }
+  } catch (err) {
+    console.warn('getFeaturedTheses query error, using defaults:', err)
   }
 
-  if (error) {
-    console.error('getFeaturedTheses error:', error.message || error)
-    return []
+  if (programId) {
+    return DEFAULT_THESES.filter(t => t.program_id === programId)
   }
-
-  return flattenTags(data ?? [])
+  return DEFAULT_THESES
 })
 
 // ── Colleges & programs (for filters and form pickers) ───────────────────────
 
-import { DEFAULT_COLLEGES, DEFAULT_PROGRAMS, getProgramLogoUrl } from '@/lib/constants/programs'
+import { DEFAULT_COLLEGES, DEFAULT_PROGRAMS, DEFAULT_TAGS, DEFAULT_THESES, getProgramLogoUrl } from '@/lib/constants/programs'
 
 export const getAllColleges = cache(async (): Promise<College[]> => {
   try {
@@ -267,9 +295,22 @@ export async function getThesesList(opts: {
     count = fallbackRes.count
   }
 
-  if (error) {
-    console.error('getThesesList error:', error.message || error)
-    return { theses: [], totalCount: 0, page, totalPages: 0 }
+  if (error || (!data || data.length === 0)) {
+    let list = DEFAULT_THESES
+    if (opts.query) {
+      const q = opts.query.toLowerCase()
+      list = list.filter(t => t.title.toLowerCase().includes(q) || t.authors.toLowerCase().includes(q) || t.abstract.toLowerCase().includes(q))
+    }
+    if (opts.tagIds && opts.tagIds.length > 0) {
+      list = list.filter(t => t.tags.some(tag => opts.tagIds!.includes(tag.id)))
+    }
+    const totalCount = list.length
+    return {
+      theses: list.slice(from, to + 1),
+      totalCount,
+      page,
+      totalPages: Math.ceil(totalCount / PAGE_SIZE),
+    }
   }
 
   const theses = flattenTags(data ?? [])
@@ -368,15 +409,18 @@ async function intersectTagsInMemory(
 // ── Available tags (for filter panel) ────────────────────────────────────────
 
 export const getAvailableTags = cache(async (limit = 40): Promise<Tag[]> => {
-  const supabase = await createClient()
-  const { data } = await runWithRetry(() =>
-    supabase
-      .from('tags')
-      .select('*')
-      .order('name')
-      .limit(limit)
-  )
-  return data ?? []
+  try {
+    const supabase = await createClient()
+    const { data } = await runWithRetry(() =>
+      supabase
+        .from('tags')
+        .select('*')
+        .order('name')
+        .limit(limit)
+    )
+    if (data && data.length > 0) return data
+  } catch {}
+  return DEFAULT_TAGS.slice(0, limit)
 })
 
 // ── User uploads ──────────────────────────────────────────────────────────────
@@ -404,17 +448,23 @@ export const getUserTheses = cache(async (userId: string): Promise<ThesisWithRel
 
 export const getThesisById = cache(async (id: string): Promise<ThesisWithRelations | null> => {
   if (!isValidUUID(id)) return null
-  const supabase = await createClient()
-  const { data, error } = await runWithRetry(() =>
-    supabase
-      .from('theses')
-      .select(`*, college:colleges(*), program:programs(*), tags:thesis_tags(tag:tags(*))`)
-      .eq('id', id)
-      .single()
-  )
+  try {
+    const supabase = await createClient()
+    const { data, error } = await runWithRetry(() =>
+      supabase
+        .from('theses')
+        .select(`*, college:colleges(*), program:programs(*), tags:thesis_tags(tag:tags(*))`)
+        .eq('id', id)
+        .single()
+    )
 
-  if (error || !data) return null
-  return flattenTags([data])[0] ?? null
+    if (!error && data) return flattenTags([data])[0] ?? null
+  } catch {}
+
+  const defaultMatch = DEFAULT_THESES.find(t => t.id === id)
+  if (defaultMatch) return defaultMatch
+
+  return null
 })
 
 // ── View counter ──────────────────────────────────────────────────────────────
