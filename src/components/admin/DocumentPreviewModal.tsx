@@ -28,7 +28,7 @@ export default function DocumentPreviewModal({
   const isRejectedStatus = thesis.status === 'rejected'
 
   // Compute storage URLs
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://zivzqlwpthywloafcpaf.supabase.co'
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://vfnzodlxtumhfmoyerye.supabase.co'
   const pdfUrl = thesis.pdf_file
     ? (thesis.pdf_file.startsWith('http')
         ? thesis.pdf_file
