@@ -2,7 +2,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentUser, isAdminUser } from '@/lib/auth'
 import type { ThesisWithRelations, Program, Tag, AuditLog } from '@/types/database'
-import { DEFAULT_PROGRAMS, DEFAULT_THESES, getProgramLogoUrl } from '@/lib/constants/programs'
+import { DEFAULT_PROGRAMS, DEFAULT_TAGS, DEFAULT_THESES, getProgramLogoUrl } from '@/lib/constants/programs'
 
 export interface AdminStats {
   totalTheses: number
@@ -195,8 +195,28 @@ export async function getMasterlistTheses(options?: {
     error = fallbackRes.error
   }
 
-  if (error) {
-    return []
+  if (error || (!data || data.length === 0)) {
+    let list: AdminThesisItem[] = DEFAULT_THESES.map(t => ({
+      ...t,
+      uploaderEmail: 'student@psu.palawan.edu.ph',
+      uploaderName: t.authors.split(',')[0].trim(),
+    }))
+
+    if (options?.programId) {
+      list = list.filter(t => t.program_id === options.programId)
+    }
+    if (options?.status && options.status !== 'all') {
+      list = list.filter(t => (t.status || 'verified') === options.status)
+    }
+    if (options?.query) {
+      const q = options.query.toLowerCase()
+      list = list.filter(t =>
+        t.title.toLowerCase().includes(q) ||
+        t.authors.toLowerCase().includes(q) ||
+        t.abstract.toLowerCase().includes(q)
+      )
+    }
+    return list
   }
 
   return formatThesisRows(data ?? [])
@@ -230,18 +250,23 @@ export async function getAllTagsWithUsage(): Promise<(Tag & { count: number })[]
     const tags = tagsRes.data ?? []
     const junction = junctionRes.data ?? []
 
-    const countMap: Record<string, number> = {}
-    junction.forEach(j => {
-      countMap[j.tag_id] = (countMap[j.tag_id] || 0) + 1
-    })
+    if (tags.length > 0) {
+      const countMap: Record<string, number> = {}
+      junction.forEach(j => {
+        countMap[j.tag_id] = (countMap[j.tag_id] || 0) + 1
+      })
 
-    return tags.map(t => ({
-      ...t,
-      count: countMap[t.id] || 0,
-    }))
-  } catch {
-    return []
-  }
+      return tags.map(t => ({
+        ...t,
+        count: countMap[t.id] || 0,
+      }))
+    }
+  } catch {}
+
+  return DEFAULT_TAGS.map(t => ({
+    ...t,
+    count: 1,
+  }))
 }
 
 /**
