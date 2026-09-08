@@ -2,7 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 /** Route trees that require a signed-in user. */
-const PROTECTED_ROOTS = ['/profile', '/bookmarks']
+const PROTECTED_ROOTS = ['/profile', '/bookmarks', '/theses/upload']
 
 /** Pages that make no sense to a user who is already signed in. */
 const AUTH_PAGES = ['/login', '/register']

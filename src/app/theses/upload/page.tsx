@@ -1,6 +1,5 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { redirect } from 'next/navigation'
 import { Suspense } from 'react'
 import { getCurrentUser } from '@/lib/auth'
 import { getAllColleges, getAllPrograms, getAvailableTags } from '@/lib/data'
@@ -17,10 +16,6 @@ export const metadata: Metadata = {
 
 export default async function UploadPage() {
   const user = await getCurrentUser().catch(() => null)
-
-  if (!user) {
-    redirect('/login?redirect=/theses/upload')
-  }
 
   const [colleges, programs, tags] = await Promise.all([
     getAllColleges().catch(() => DEFAULT_COLLEGES),
