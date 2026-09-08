@@ -50,6 +50,21 @@ export default function ProgramCarousel({ programs, activeProgramId }: ProgramCa
   const router = useRouter()
   const searchParams = useSearchParams()
 
+  const [isMobile, setIsMobile] = useState(false)
+
+  useEffect(() => {
+    function handleResize() {
+      setIsMobile(window.innerWidth < 640)
+    }
+    handleResize()
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
+
+  const slideWidthPct = isMobile ? 82 : 60
+  const slideGap = isMobile ? '1rem' : '1.5rem'
+  const centreOffsetPct = (100 - slideWidthPct) / 2
+
   const items: CarouselItem[] = useMemo(
     () => [{ id: null, prog_name: 'All Programs', logo: '' }, ...programs],
     [programs]
@@ -190,12 +205,11 @@ export default function ProgramCarousel({ programs, activeProgramId }: ProgramCa
       {/* Forest academic track */}
       <div
         ref={cardRef}
-        className="overflow-hidden rounded-3xl relative w-full"
+        className="overflow-hidden rounded-3xl relative w-full p-4 sm:p-8 md:p-11"
         style={{
           background: 'linear-gradient(135deg, #0D2418 0%, #173B28 50%, #1F4C33 100%)',
           border: '1px solid rgba(143,168,133,0.25)',
           boxShadow: '0 20px 50px -10px rgba(13,36,24,0.6)',
-          padding: '2.75rem 2rem 2.75rem',
           isolation: 'isolate',
         }}
         onTouchStart={onTouchStart}
@@ -243,7 +257,9 @@ export default function ProgramCarousel({ programs, activeProgramId }: ProgramCa
             <div
               key={sheet.id}
               ref={el => { sheetRefs.current[idx] = el }}
-              className="absolute will-change-transform pointer-events-none select-none transition-transform duration-75 ease-out"
+              className={`absolute will-change-transform pointer-events-none select-none transition-transform duration-75 ease-out ${
+                sheet.id === 1 || sheet.id === 9 || sheet.id === 2 || sheet.id === 10 ? 'hidden sm:block' : ''
+              }`}
               style={{
                 top: sheet.top,
                 left: sheet.left,
@@ -266,9 +282,9 @@ export default function ProgramCarousel({ programs, activeProgramId }: ProgramCa
         </div>
 
         <div
-          className="flex gap-6 relative z-10"
+          className="flex gap-4 sm:gap-6 relative z-10"
           style={{
-            transform: `translateX(calc(${CENTRE_OFFSET_PCT}% - ${current} * (${SLIDE_WIDTH_PCT}% + ${SLIDE_GAP})))`,
+            transform: `translateX(calc(${centreOffsetPct}% - ${current} * (${slideWidthPct}% + ${slideGap})))`,
             transition: 'transform 0.7s cubic-bezier(0.4,0,0.2,1)',
             willChange: 'transform',
           }}
@@ -284,25 +300,23 @@ export default function ProgramCarousel({ programs, activeProgramId }: ProgramCa
                 onClick={() => select(idx)}
                 className="flex-shrink-0 flex flex-col items-center justify-center transition-all duration-500 focus:outline-none"
                 style={{
-                  flexBasis: `${SLIDE_WIDTH_PCT}%`,
-                  maxWidth: `${SLIDE_WIDTH_PCT}%`,
+                  flexBasis: `${slideWidthPct}%`,
+                  maxWidth: `${slideWidthPct}%`,
                   opacity: isCentred ? 1 : 0.35,
-                  transform: isCentred ? 'scale(1.05)' : 'scale(0.85)',
+                  transform: isCentred ? 'scale(1.04)' : 'scale(0.88)',
                   background: 'transparent',
                   border: 'none',
                   boxShadow: 'none',
                   cursor: 'pointer',
-                  padding: '0.75rem',
+                  padding: '0.5rem',
                 }}
                 aria-pressed={isFiltering}
                 aria-current={isCentred ? 'true' : undefined}
               >
                 {/* ─── Program Logo Circle ─── */}
                 <div
-                  className="rounded-full flex items-center justify-center mb-3.5 overflow-hidden transition-all duration-500"
+                  className="rounded-full flex items-center justify-center mb-2 sm:mb-3.5 overflow-hidden transition-all duration-500 w-20 h-20 sm:w-28 sm:h-28"
                   style={{
-                    width: '110px',
-                    height: '110px',
                     background: isCentred
                       ? 'linear-gradient(135deg, rgba(143,168,133,0.3), rgba(13,36,24,0.95))'
                       : 'rgba(255,255,255,0.06)',
@@ -317,7 +331,7 @@ export default function ProgramCarousel({ programs, activeProgramId }: ProgramCa
                   }}
                 >
                   {prog.id == null ? (
-                    <svg className="h-12 w-12 text-emerald-200/90" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg className="h-8 w-8 sm:h-12 sm:w-12 text-emerald-200/90" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
                     </svg>
                   ) : prog.logo ? (
@@ -326,10 +340,10 @@ export default function ProgramCarousel({ programs, activeProgramId }: ProgramCa
                       alt={prog.prog_name}
                       width={80}
                       height={80}
-                      className="h-20 w-20 object-contain"
+                      className="h-14 w-14 sm:h-20 sm:w-20 object-contain"
                     />
                   ) : (
-                    <svg className="h-12 w-12 text-emerald-200/90" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg className="h-8 w-8 sm:h-12 sm:w-12 text-emerald-200/90" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
                     </svg>
                   )}
@@ -337,11 +351,10 @@ export default function ProgramCarousel({ programs, activeProgramId }: ProgramCa
 
                 {/* Program Name */}
                 <span
-                  className="text-center font-semibold text-sm sm:text-base leading-snug"
+                  className="text-center font-semibold text-xs sm:text-base leading-snug max-w-[280px] sm:max-w-[420px]"
                   style={{
                     color: isCentred ? '#FFFFFF' : 'rgba(255,255,255,0.65)',
                     fontFamily: isCentred ? "'Playfair Display', Georgia, serif" : 'inherit',
-                    maxWidth: '420px',
                   }}
                 >
                   {prog.prog_name}
@@ -349,7 +362,7 @@ export default function ProgramCarousel({ programs, activeProgramId }: ProgramCa
 
                 {isFiltering && (
                   <span
-                    className="mt-2 text-[10px] font-bold uppercase tracking-widest px-2.5 py-0.5 rounded-full"
+                    className="mt-1.5 sm:mt-2 text-[9px] sm:text-[10px] font-bold uppercase tracking-widest px-2 sm:px-2.5 py-0.5 rounded-full"
                     style={{ background: 'rgba(143,168,133,0.25)', color: '#A3C49B', border: '1px solid rgba(143,168,133,0.4)' }}
                   >
                     Active Filter
@@ -368,7 +381,7 @@ export default function ProgramCarousel({ programs, activeProgramId }: ProgramCa
             type="button"
             onClick={showPrev}
             aria-label="Previous program"
-            className="absolute top-1/2 -translate-y-1/2 -left-4 md:-left-6 h-10 w-10 rounded-full flex items-center justify-center text-white border transition-all hover:scale-110"
+            className="absolute top-1/2 -translate-y-1/2 left-1 sm:-left-3 md:-left-6 h-9 w-9 sm:h-10 sm:w-10 rounded-full flex items-center justify-center text-white border transition-all hover:scale-110 z-20"
             style={{
               background: 'linear-gradient(135deg, #173B28, #0D2418)',
               borderColor: 'rgba(143,168,133,0.45)',
@@ -381,7 +394,7 @@ export default function ProgramCarousel({ programs, activeProgramId }: ProgramCa
             type="button"
             onClick={showNext}
             aria-label="Next program"
-            className="absolute top-1/2 -translate-y-1/2 -right-4 md:-right-6 h-10 w-10 rounded-full flex items-center justify-center text-white border transition-all hover:scale-110"
+            className="absolute top-1/2 -translate-y-1/2 right-1 sm:-right-3 md:-right-6 h-9 w-9 sm:h-10 sm:w-10 rounded-full flex items-center justify-center text-white border transition-all hover:scale-110 z-20"
             style={{
               background: 'linear-gradient(135deg, #173B28, #0D2418)',
               borderColor: 'rgba(143,168,133,0.45)',

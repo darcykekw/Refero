@@ -308,6 +308,25 @@ export default function NavbarClient({ initialUser }: NavbarClientProps) {
               </Link>
             )
           })}
+          {isAdmin && (
+            <Link
+              href="/admin"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '12px 24px',
+                fontSize: '0.9375rem',
+                fontWeight: 600,
+                color: '#FDE047',
+                textDecoration: 'none',
+                background: 'rgba(234, 179, 8, 0.1)',
+                borderLeft: '3px solid #EAB308',
+              }}
+            >
+              <span>🛡️ Admin Dashboard</span>
+            </Link>
+          )}
           {user && (
             <>
               <Link href="/profile" style={{ display: 'block', padding: '12px 24px', fontSize: '0.9375rem', color: 'rgba(255,255,255,0.8)', textDecoration: 'none', borderLeft: '3px solid transparent' }}>

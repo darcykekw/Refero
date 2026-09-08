@@ -39,7 +39,7 @@ export default async function ThesisDetailPage({ params }: PageProps) {
   const isOwner = user?.id === thesis.uploaded_by
 
   return (
-    <div className="max-w-5xl page-gutter py-10 space-y-8">
+    <div className="w-full max-w-5xl page-gutter py-6 sm:py-10 space-y-6 sm:space-y-8">
 
       {/* Breadcrumb */}
       <nav className="breadcrumb-bar" aria-label="Breadcrumb">
@@ -47,20 +47,20 @@ export default async function ThesisDetailPage({ params }: PageProps) {
         <span className="divider">/</span>
         <Link href="/theses">Theses</Link>
         <span className="divider">/</span>
-        <span className="current truncate max-w-xs sm:max-w-md">{thesis.title}</span>
+        <span className="current truncate max-w-[200px] sm:max-w-md">{thesis.title}</span>
       </nav>
 
       {/* Header */}
-      <div className="card p-6 sm:p-8 space-y-4">
+      <div className="card p-5 sm:p-8 space-y-4">
         <div>
           <p className="text-xs font-semibold text-sky-600 uppercase tracking-wide mb-2">
             {thesis.college.college_name} · {thesis.program.prog_name}
           </p>
-          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 leading-snug">{thesis.title}</h1>
+          <h1 className="text-xl sm:text-3xl font-bold text-slate-900 leading-snug">{thesis.title}</h1>
         </div>
 
         {/* Metadata row */}
-        <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-slate-500 border-t border-slate-100 pt-4">
+        <div className="flex flex-wrap gap-x-4 sm:gap-x-6 gap-y-2 text-xs sm:text-sm text-slate-500 border-t border-slate-100 pt-4">
           <span><strong className="text-slate-700">Authors:</strong> {thesis.authors}</span>
           {thesis.adviser && <span><strong className="text-slate-700">Adviser:</strong> {thesis.adviser}</span>}
           <span><strong className="text-slate-700">Year:</strong> {thesis.year_submitted}</span>
@@ -100,15 +100,15 @@ export default async function ThesisDetailPage({ params }: PageProps) {
       </div>
 
       {/* Abstract */}
-      <section className="card p-6 sm:p-8">
+      <section className="card p-5 sm:p-8">
         <h2 className="text-lg font-semibold text-slate-800 mb-3">Abstract</h2>
-        <p className="text-slate-600 leading-relaxed whitespace-pre-line">{thesis.abstract}</p>
+        <p className="text-slate-600 leading-relaxed whitespace-pre-line text-sm sm:text-base">{thesis.abstract}</p>
       </section>
 
       {/* PDF viewer */}
       {thesis.pdf_file && (
-        <section className="card p-6 sm:p-8 space-y-4">
-          <div className="flex items-center justify-between">
+        <section className="card p-5 sm:p-8 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <h2 className="text-lg font-semibold text-slate-800">Full Document</h2>
             {pdfUrl && (
               <a
@@ -116,7 +116,7 @@ export default async function ThesisDetailPage({ params }: PageProps) {
                 download
                 target="_blank"
                 rel="noopener noreferrer"
-                className="btn btn-primary btn-sm"
+                className="btn btn-primary btn-sm w-full sm:w-auto"
               >
                 Download PDF
               </a>
@@ -127,7 +127,7 @@ export default async function ThesisDetailPage({ params }: PageProps) {
               src={pdfUrl}
               title={`PDF: ${thesis.title}`}
               className="w-full rounded-xl border border-slate-200"
-              style={{ height: '70vh' }}
+              style={{ height: '65vh', minHeight: '380px' }}
             />
           ) : (
             <p className="text-sm text-slate-500">
