@@ -60,6 +60,14 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
+  function redirectWithCookies(url: URL | string) {
+    const redirectRes = NextResponse.redirect(url)
+    supabaseResponse.cookies.getAll().forEach((cookie) => {
+      redirectRes.cookies.set(cookie.name, cookie.value, cookie)
+    })
+    return redirectRes
+  }
+
   // Admin routes: require admin access
   const isAdmin =
     (user?.email && user.email.toLowerCase() === '202380256@psu.palawan.edu.ph') ||
@@ -72,14 +80,14 @@ export async function updateSession(request: NextRequest) {
       loginUrl.pathname = '/login'
       loginUrl.search = ''
       loginUrl.searchParams.set('redirectTo', `${pathname}${search}`)
-      return NextResponse.redirect(loginUrl)
+      return redirectWithCookies(loginUrl)
     }
 
     if (!isAdmin) {
       const homeUrl = request.nextUrl.clone()
       homeUrl.pathname = '/'
       homeUrl.search = '?error=unauthorized'
-      return NextResponse.redirect(homeUrl)
+      return redirectWithCookies(homeUrl)
     }
   }
 
@@ -88,12 +96,12 @@ export async function updateSession(request: NextRequest) {
     if (pathname === '/') {
       const adminUrl = request.nextUrl.clone()
       adminUrl.pathname = '/admin'
-      return NextResponse.redirect(adminUrl)
+      return redirectWithCookies(adminUrl)
     }
     if (pathname === '/theses') {
       const adminUrl = request.nextUrl.clone()
       adminUrl.pathname = '/admin/feed'
-      return NextResponse.redirect(adminUrl)
+      return redirectWithCookies(adminUrl)
     }
   }
 
@@ -105,7 +113,7 @@ export async function updateSession(request: NextRequest) {
     // Path *and* query, so signing in returns the visitor to the exact page
     // they asked for — page 3 of a filtered list, not the bare list.
     loginUrl.searchParams.set('redirectTo', `${pathname}${search}`)
-    return NextResponse.redirect(loginUrl)
+    return redirectWithCookies(loginUrl)
   }
 
   // If already logged in, don't show auth pages. `?reset=success` is exempt: a
@@ -116,7 +124,7 @@ export async function updateSession(request: NextRequest) {
     const homeUrl = request.nextUrl.clone()
     homeUrl.pathname = '/'
     homeUrl.search = ''
-    return NextResponse.redirect(homeUrl)
+    return redirectWithCookies(homeUrl)
   }
 
   return supabaseResponse
