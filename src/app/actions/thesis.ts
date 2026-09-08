@@ -31,6 +31,7 @@ function text(formData: FormData, name: string): string {
 
 function parseFormFields(formData: FormData) {
   const pdf = formData.get('pdf_file')
+  const pdfPath = text(formData, 'pdf_path')
 
   return {
     title:         text(formData, 'title'),
@@ -43,7 +44,8 @@ function parseFormFields(formData: FormData) {
     panelScoreStr: text(formData, 'panel_score'),
     tagIds:        formData.getAll('tag_ids').filter((v): v is string => typeof v === 'string'),
     newTagsStr:    text(formData, 'new_tags'),
-    pdfFile:       pdf instanceof File ? pdf : null,
+    pdfFile:       pdf instanceof File && pdf.size > 0 ? pdf : null,
+    pdfPath:       pdfPath || null,
   }
 }
 
@@ -68,8 +70,12 @@ function validateFields(
   }
 
   if (requirePdf) {
-    if (!fields.pdfFile || fields.pdfFile.size === 0) return 'Please upload a PDF file.'
-    if (fields.pdfFile.size > 20 * 1024 * 1024) return 'PDF file must be under 20 MB.'
+    if (!fields.pdfPath && (!fields.pdfFile || fields.pdfFile.size === 0)) {
+      return 'Please upload a PDF file.'
+    }
+    if (fields.pdfFile && fields.pdfFile.size > 20 * 1024 * 1024) {
+      return 'PDF file must be under 20 MB.'
+    }
   }
 
   return null
@@ -80,11 +86,16 @@ async function uploadPdf(
   file: File
 ): Promise<{ path: string } | { error: string }> {
   try {
-    const admin = createAdminClient()
+    let client: any
+    try {
+      client = createAdminClient()
+    } catch {
+      client = await createClient()
+    }
     const path = `${userId}/${Date.now()}.pdf`
     const arrayBuffer = await file.arrayBuffer()
     const buffer = Buffer.from(arrayBuffer)
-    const { error } = await admin.storage
+    const { error } = await client.storage
       .from(THESIS_PDF_BUCKET)
       .upload(path, buffer, { contentType: 'application/pdf', upsert: true })
     if (error) {
@@ -103,13 +114,18 @@ async function syncTags(
   tagIds: string[],
   newTagsStr: string
 ): Promise<void> {
-  const admin = createAdminClient()
+  let db: any
+  try {
+    db = createAdminClient()
+  } catch {
+    db = await createClient()
+  }
   const allTagIds = [...tagIds]
 
   if (newTagsStr) {
     const names = newTagsStr.split(',').map(n => n.trim()).filter(Boolean)
     for (const name of names) {
-      const { data: existing } = await admin
+      const { data: existing } = await db
         .from('tags')
         .select('id')
         .ilike('name', name)
@@ -118,7 +134,7 @@ async function syncTags(
       if (existing) {
         allTagIds.push(existing.id)
       } else {
-        const { data: created } = await admin
+        const { data: created } = await db
           .from('tags')
           .insert({ name })
           .select('id')
@@ -129,9 +145,9 @@ async function syncTags(
   }
 
   const unique = [...new Set(allTagIds)].filter(Boolean)
-  await admin.from('thesis_tags').delete().eq('thesis_id', thesisId)
+  await db.from('thesis_tags').delete().eq('thesis_id', thesisId)
   if (unique.length > 0) {
-    await admin.from('thesis_tags').insert(
+    await db.from('thesis_tags').insert(
       unique.map(tag_id => ({ thesis_id: thesisId, tag_id }))
     )
   }
@@ -159,22 +175,37 @@ export async function uploadThesis(
     const validationError = validateFields(fields, true)
     if (validationError) return { error: validationError }
 
-    const uploadResult = await uploadPdf(userId, fields.pdfFile!)
-    if ('error' in uploadResult) return { error: uploadResult.error }
+    let pdfStoragePath = fields.pdfPath
+    if (!pdfStoragePath && fields.pdfFile) {
+      const uploadResult = await uploadPdf(userId, fields.pdfFile)
+      if ('error' in uploadResult) return { error: uploadResult.error }
+      pdfStoragePath = uploadResult.path
+    }
+
+    if (!pdfStoragePath) {
+      return { error: 'Please select a valid PDF file to upload.' }
+    }
+
+    let dbClient: any = null
+    try {
+      dbClient = createAdminClient()
+    } catch (err) {
+      console.warn('createAdminClient unavailable, falling back to authenticated client:', err)
+      dbClient = supabase
+    }
 
     // Ensure college and program records exist in DB if tables are present
     try {
-      const admin = createAdminClient()
       const selectedCollege = DEFAULT_COLLEGES.find(c => c.id === fields.collegeId)
       if (selectedCollege) {
-        await admin.from('colleges').upsert({
+        await dbClient.from('colleges').upsert({
           id: selectedCollege.id,
           college_name: selectedCollege.college_name,
         }, { onConflict: 'id' })
       }
       const selectedProgram = DEFAULT_PROGRAMS.find(p => p.id === fields.programId)
       if (selectedProgram) {
-        await admin.from('programs').upsert({
+        await dbClient.from('programs').upsert({
           id: selectedProgram.id,
           prog_name: selectedProgram.prog_name,
           college_id: selectedProgram.college_id,
@@ -185,10 +216,8 @@ export async function uploadThesis(
       // Non-fatal if tables do not exist
     }
 
-    // Insert the thesis using admin client to bypass RLS.
-    // The service-role key skips RLS while still storing the real user ID.
-    const adminClient = createAdminClient()
-    const { data: thesis, error: insertError } = await adminClient
+    // Insert the thesis using admin client if available, or user client as fallback
+    const { data: thesis, error: insertError } = await dbClient
       .from('theses')
       .insert({
         title:          fields.title,
@@ -199,7 +228,7 @@ export async function uploadThesis(
         college_id:     fields.collegeId,
         program_id:     fields.programId,
         panel_score:    fields.panelScoreStr ? parseFloat(fields.panelScoreStr) : null,
-        pdf_file:       uploadResult.path,
+        pdf_file:       pdfStoragePath,
         uploaded_by:    userId,
         view_count:     0,
       })
@@ -220,7 +249,7 @@ export async function uploadThesis(
     try {
       const ssId = await getPaperId(fields.title)
       if (ssId) {
-        await createAdminClient().from('theses').update({ ss_paper_id: ssId }).eq('id', thesis.id)
+        await dbClient.from('theses').update({ ss_paper_id: ssId }).eq('id', thesis.id)
       }
     } catch { /* non-critical */ }
 
@@ -270,13 +299,15 @@ export async function updateThesis(
     const validationError = validateFields(fields, false)
     if (validationError) return { error: validationError }
 
-    let pdfPath = existing.pdf_file
-    if (fields.pdfFile && fields.pdfFile.size > 0) {
+    let pdfPath = fields.pdfPath || existing.pdf_file
+    if (!fields.pdfPath && fields.pdfFile && fields.pdfFile.size > 0) {
       if (fields.pdfFile.size > 20 * 1024 * 1024) return { error: 'PDF file must be under 20 MB.' }
       const uploadResult = await uploadPdf(user.id, fields.pdfFile)
       if ('error' in uploadResult) return { error: uploadResult.error }
       try {
-        await createAdminClient().storage.from(THESIS_PDF_BUCKET).remove([existing.pdf_file])
+        let client: any
+        try { client = createAdminClient() } catch { client = supabase }
+        await client.storage.from(THESIS_PDF_BUCKET).remove([existing.pdf_file])
       } catch {}
       pdfPath = uploadResult.path
     }

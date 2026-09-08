@@ -1,9 +1,10 @@
 'use client'
 
-import { useActionState, useState, useEffect } from 'react'
+import { useActionState, useState, useEffect, useTransition } from 'react'
 import type { College, Program, Tag, ThesisWithRelations } from '@/types/database'
 import type { ThesisActionState } from '@/app/actions/thesis'
 import { DEFAULT_COLLEGES, DEFAULT_PROGRAMS, DEFAULT_TAGS } from '@/lib/constants/programs'
+import { createClient } from '@/lib/supabase/client'
 
 type ActionFn = (prev: ThesisActionState, formData: FormData) => Promise<ThesisActionState>
 
@@ -30,6 +31,10 @@ export default function ThesisFormClient({
   pdfPublicUrl,
 }: ThesisFormClientProps) {
   const [state, formAction, pending] = useActionState<ThesisActionState, FormData>(action, {})
+  const [isPending, startTransition] = useTransition()
+  const [clientUploading, setClientUploading] = useState(false)
+  const [uploadStatus, setUploadStatus] = useState<string | null>(null)
+  const [clientError, setClientError] = useState<string | null>(null)
 
   const effectiveColleges = (colleges && colleges.length > 0 ? colleges : DEFAULT_COLLEGES).filter(
     (c): c is College => Boolean(c && c.id && c.college_name)
@@ -75,17 +80,136 @@ export default function ThesisFormClient({
     }
   }, [state.success, state.localThesis])
 
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    setClientError(null)
+
+    const form = e.currentTarget
+    const fileInput = form.querySelector<HTMLInputElement>('#thesis-pdf')
+    const file = fileInput?.files?.[0]
+
+    if (mode === 'upload' && !file && !initialData?.pdf_file) {
+      setClientError('Please select a PDF file.')
+      return
+    }
+
+    if (file && file.size > 20 * 1024 * 1024) {
+      setClientError('PDF file must be under 20 MB.')
+      return
+    }
+
+    const titleInput = form.querySelector<HTMLInputElement>('#thesis-title')
+    if (!titleInput?.value || titleInput.value.trim().length < 3) {
+      setClientError('Title must be at least 3 characters.')
+      return
+    }
+
+    const abstractInput = form.querySelector<HTMLTextAreaElement>('#thesis-abstract')
+    if (!abstractInput?.value || abstractInput.value.trim().length < 10) {
+      setClientError('Abstract must be at least 10 characters.')
+      return
+    }
+
+    const authorsInput = form.querySelector<HTMLInputElement>('#thesis-authors')
+    if (!authorsInput?.value || authorsInput.value.trim().length === 0) {
+      setClientError('Authors field is required.')
+      return
+    }
+
+    if (!selectedCollegeId) {
+      setClientError('Please select a college.')
+      return
+    }
+
+    if (!selectedProgramId) {
+      setClientError('Please select a program.')
+      return
+    }
+
+    try {
+      setClientUploading(true)
+      let pdfPath = ''
+
+      if (file) {
+        setUploadStatus('Uploading PDF manuscript...')
+        const supabase = createClient()
+        const { data: userData, error: userError } = await supabase.auth.getUser()
+        if (userError || !userData?.user) {
+          setClientError('You must be signed in to upload a thesis. Please sign in and try again.')
+          setClientUploading(false)
+          setUploadStatus(null)
+          return
+        }
+
+        const userId = userData.user.id
+        const cleanName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
+        const path = `${userId}/${Date.now()}_${cleanName}`
+
+        const { error: uploadError } = await supabase.storage
+          .from('thesis-pdfs')
+          .upload(path, file, {
+            contentType: 'application/pdf',
+            upsert: true,
+          })
+
+        if (uploadError) {
+          console.error('Direct Supabase upload error:', uploadError)
+          setClientError(`PDF upload failed: ${uploadError.message}. Please try again.`)
+          setClientUploading(false)
+          setUploadStatus(null)
+          return
+        }
+
+        pdfPath = path
+      }
+
+      setUploadStatus('Saving thesis information...')
+      const formData = new FormData(form)
+      if (pdfPath) {
+        formData.set('pdf_path', pdfPath)
+        formData.delete('pdf_file')
+      }
+
+      startTransition(async () => {
+        try {
+          await formAction(formData)
+        } catch (err: any) {
+          console.error('formAction error:', err)
+          setClientError(err?.message || 'Failed to submit thesis. Please try again.')
+        } finally {
+          setClientUploading(false)
+          setUploadStatus(null)
+        }
+      })
+    } catch (err: any) {
+      console.error('Submission error:', err)
+      setClientError(err?.message || 'An error occurred while uploading. Please try again.')
+      setClientUploading(false)
+      setUploadStatus(null)
+    }
+  }
+
+  const isBusy = pending || clientUploading || isPending
+
   return (
-    <form action={formAction} className="space-y-6">
+    <form onSubmit={handleSubmit} className="space-y-6">
       {/* Hidden thesis ID for edit mode */}
       {mode === 'edit' && initialData && (
         <input type="hidden" name="thesis_id" value={initialData.id} />
       )}
 
       {/* Error banner */}
-      {state.error && (
+      {(clientError || state.error) && (
         <div className="alert alert-error" role="alert">
-          {state.error}
+          {clientError || state.error}
+        </div>
+      )}
+
+      {/* Progress banner */}
+      {uploadStatus && (
+        <div className="flex items-center gap-3 p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-sm font-medium animate-pulse">
+          <span className="spinner text-emerald-600" />
+          <span>{uploadStatus}</span>
         </div>
       )}
 
@@ -362,13 +486,13 @@ export default function ThesisFormClient({
         <button
           id="thesis-submit-btn"
           type="submit"
-          disabled={pending}
+          disabled={isBusy}
           className="btn btn-primary gap-2"
         >
-          {pending && <span className="spinner" />}
-          {pending
-            ? mode === 'upload' ? 'Uploading…' : 'Saving…'
-            : mode === 'upload' ? 'Upload Thesis' : 'Save Changes'}
+          {isBusy && <span className="spinner" />}
+          {uploadStatus || (isBusy
+            ? mode === 'upload' ? 'Saving…' : 'Saving…'
+            : mode === 'upload' ? 'Upload Thesis' : 'Save Changes')}
         </button>
         <a href={mode === 'edit' && initialData ? `/theses/${initialData.id}` : '/theses'} className="btn btn-ghost">
           Cancel
