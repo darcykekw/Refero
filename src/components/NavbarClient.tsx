@@ -13,8 +13,8 @@ interface NavbarClientProps {
 const NAV_LINKS = [
   { href: '/',              label: 'Home'      },
   { href: '/theses',        label: 'Theses'    },
-  { href: '/bookmarks',     label: 'Bookmarks' },
   { href: '/theses/upload', label: 'Upload'    },
+  { href: '/bookmarks',     label: 'Bookmarks' },
 ]
 
 export default function NavbarClient({ initialUser }: NavbarClientProps) {
