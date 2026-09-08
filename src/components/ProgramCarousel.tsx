@@ -98,14 +98,18 @@ export default function ProgramCarousel({ programs, activeProgramId }: ProgramCa
 
       const program = items[idx]
       const params = new URLSearchParams(searchParams.toString())
-      if (program.id) params.set('program', program.id)
-      else params.delete('program')
+      if (program.id && program.id !== activeProgramId) {
+        params.set('program', program.id)
+      } else {
+        params.delete('program')
+      }
 
       const qs = params.toString()
       router.push(qs ? `/?${qs}` : '/', { scroll: false })
     },
-    [items, router, searchParams, activeIndex]
+    [items, router, searchParams, activeIndex, activeProgramId]
   )
+
 
   const showPrev = useCallback(() => show(current - 1), [show, current])
   const showNext = useCallback(() => show(current + 1), [show, current])

@@ -50,7 +50,7 @@ export default function ThesisCard({ thesis, showActions = false, activeTags = [
           {/* College · Program breadcrumb + Bookmark */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}>
             <p style={{ fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.09em', textTransform: 'uppercase', color: '#2E6A47', lineHeight: 1.2 }}>
-              {thesis.college.college_name} · {thesis.program.prog_name}
+              {thesis.college?.college_name ?? 'College of Sciences'} · {thesis.program?.prog_name ?? 'Sciences'}
             </p>
             <BookmarkButton
               thesisId={thesis.id}
