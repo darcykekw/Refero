@@ -31,6 +31,63 @@ const COLOR_PALETTE = [
   { name: 'Slate', value: '#475569' },
 ]
 
+const MIGRATION_SQL = `-- Refero — Migration 006: Bookmarks & Collections System
+-- Run this in: Supabase Dashboard > SQL Editor
+
+CREATE TABLE IF NOT EXISTS public.collections (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  name text NOT NULL,
+  description text NOT NULL DEFAULT '',
+  color text NOT NULL DEFAULT '#2E6A47',
+  is_default boolean NOT NULL DEFAULT false,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS public.bookmarks (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  thesis_id uuid NOT NULL REFERENCES public.theses(id) ON DELETE CASCADE,
+  collection_id uuid NOT NULL REFERENCES public.collections(id) ON DELETE CASCADE,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (collection_id, thesis_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_collections_user ON public.collections(user_id);
+CREATE INDEX IF NOT EXISTS idx_bookmarks_user ON public.bookmarks(user_id);
+CREATE INDEX IF NOT EXISTS idx_bookmarks_collection ON public.bookmarks(collection_id);
+CREATE INDEX IF NOT EXISTS idx_bookmarks_thesis ON public.bookmarks(thesis_id);
+CREATE INDEX IF NOT EXISTS idx_bookmarks_user_thesis ON public.bookmarks(user_id, thesis_id);
+
+ALTER TABLE public.collections ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.bookmarks ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'collections' AND policyname = 'collections_select_own') THEN
+    CREATE POLICY collections_select_own ON public.collections FOR SELECT TO authenticated USING (auth.uid() = user_id);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'collections' AND policyname = 'collections_insert_own') THEN
+    CREATE POLICY collections_insert_own ON public.collections FOR INSERT TO authenticated WITH CHECK (auth.uid() = user_id);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'collections' AND policyname = 'collections_update_own') THEN
+    CREATE POLICY collections_update_own ON public.collections FOR UPDATE TO authenticated USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'collections' AND policyname = 'collections_delete_own') THEN
+    CREATE POLICY collections_delete_own ON public.collections FOR DELETE TO authenticated USING (auth.uid() = user_id);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'bookmarks' AND policyname = 'bookmarks_select_own') THEN
+    CREATE POLICY bookmarks_select_own ON public.bookmarks FOR SELECT TO authenticated USING (auth.uid() = user_id);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'bookmarks' AND policyname = 'bookmarks_insert_own') THEN
+    CREATE POLICY bookmarks_insert_own ON public.bookmarks FOR INSERT TO authenticated WITH CHECK (auth.uid() = user_id);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'bookmarks' AND policyname = 'bookmarks_delete_own') THEN
+    CREATE POLICY bookmarks_delete_own ON public.bookmarks FOR DELETE TO authenticated USING (auth.uid() = user_id);
+  END IF;
+END $$;`
+
 type ViewMode = 'list' | 'grid'
 type SortBy = 'date_added' | 'year' | 'title' | 'views'
 
@@ -48,6 +105,8 @@ export default function BookmarksManager({
   )
   const [isPending, startTransition] = useTransition()
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+  const [copiedSql, setCopiedSql] = useState(false)
+  const [showSqlGuide, setShowSqlGuide] = useState(false)
 
   // Modals state
   const [isCreateOpen, setIsCreateOpen] = useState(false)
@@ -149,6 +208,9 @@ export default function BookmarksManager({
         router.refresh()
       } else {
         setToast({ message: res.error || 'Failed to create collection', type: 'error' })
+        if (res.error?.includes('migration') || res.error?.includes('schema cache') || res.error?.includes('collections')) {
+          setShowSqlGuide(true)
+        }
       }
     })
   }
@@ -180,6 +242,9 @@ export default function BookmarksManager({
         router.refresh()
       } else {
         setToast({ message: res.error || 'Failed to update collection', type: 'error' })
+        if (res.error?.includes('migration') || res.error?.includes('schema cache') || res.error?.includes('collections')) {
+          setShowSqlGuide(true)
+        }
       }
     })
   }
@@ -199,6 +264,9 @@ export default function BookmarksManager({
         router.refresh()
       } else {
         setToast({ message: res.error || 'Failed to delete collection', type: 'error' })
+        if (res.error?.includes('migration') || res.error?.includes('schema cache') || res.error?.includes('collections')) {
+          setShowSqlGuide(true)
+        }
       }
     })
   }
@@ -218,6 +286,9 @@ export default function BookmarksManager({
         router.refresh()
       } else {
         setToast({ message: res.error || 'Failed to remove bookmark.', type: 'error' })
+        if (res.error?.includes('migration') || res.error?.includes('schema cache') || res.error?.includes('collections')) {
+          setShowSqlGuide(true)
+        }
       }
     })
   }
@@ -230,6 +301,9 @@ export default function BookmarksManager({
         router.refresh()
       } else {
         setToast({ message: res.error || 'Failed to update collection', type: 'error' })
+        if (res.error?.includes('migration') || res.error?.includes('schema cache') || res.error?.includes('collections')) {
+          setShowSqlGuide(true)
+        }
       }
     })
   }
@@ -271,6 +345,68 @@ export default function BookmarksManager({
           >
             ✕
           </button>
+        </div>
+      )}
+
+      {/* ── Database Migration Required Helper Banner ── */}
+      {showSqlGuide && (
+        <div
+          style={{
+            padding: '1.25rem 1.5rem',
+            borderRadius: '12px',
+            backgroundColor: '#FEF2F2',
+            border: '1.5px solid #F87171',
+            boxShadow: '0 4px 16px rgba(185, 28, 28, 0.08)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '1rem' }}>
+            <div style={{ display: 'flex', gap: '0.75rem' }}>
+              <div style={{ width: 36, height: 36, borderRadius: '50%', backgroundColor: '#FEE2E2', color: '#991B1B', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: '1.125rem' }}>
+                ⚙️
+              </div>
+              <div>
+                <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#991B1B' }}>
+                  Supabase Database Setup Required
+                </h3>
+                <p style={{ fontSize: '0.8125rem', color: '#7F1D1D', marginTop: '0.25rem', lineHeight: 1.5 }}>
+                  The <code>public.collections</code> and <code>public.bookmarks</code> tables have not been created yet in your Supabase project. To enable collections, copy the SQL migration script below and run it once in your Supabase SQL Editor.
+                </p>
+
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.625rem', marginTop: '0.75rem' }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(MIGRATION_SQL)
+                      setCopiedSql(true)
+                      setTimeout(() => setCopiedSql(false), 2500)
+                    }}
+                    className="btn btn-sm"
+                    style={{ backgroundColor: '#173B28', color: '#FFFFFF', border: 'none', fontSize: '0.75rem', fontWeight: 600 }}
+                  >
+                    {copiedSql ? '✓ Copied SQL to Clipboard!' : '📋 Copy SQL Migration Script'}
+                  </button>
+
+                  <a
+                    href="https://supabase.com/dashboard/project/vfnzodlxtumhfmoyerye/sql"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn btn-sm btn-ghost"
+                    style={{ fontSize: '0.75rem', color: '#991B1B', borderColor: '#FCA5A5' }}
+                  >
+                    Open Supabase SQL Editor ↗
+                  </a>
+                </div>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowSqlGuide(false)}
+              style={{ color: '#991B1B', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}
+            >
+              ✕
+            </button>
+          </div>
         </div>
       )}
 

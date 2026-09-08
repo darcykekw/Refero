@@ -57,6 +57,21 @@ export async function getThesisBookmarkStatusAction(thesisId: string): Promise<M
   }
 }
 
+function formatBookmarkError(err: unknown, fallback: string): string {
+  const msg = typeof err === 'object' && err !== null && 'message' in err
+    ? String((err as { message: unknown }).message)
+    : String(err ?? '')
+  if (
+    msg.includes('schema cache') ||
+    msg.includes('does not exist') ||
+    (err as { code?: string })?.code === 'PGRST205' ||
+    (err as { code?: string })?.code === '42P01'
+  ) {
+    return "Database setup required: Table 'public.collections' does not exist yet. Please run migration 006 in your Supabase SQL Editor."
+  }
+  return msg || fallback
+}
+
 // ── Create a collection ──────────────────────────────────────────────────────
 
 export async function createCollectionAction(data: {
@@ -97,7 +112,7 @@ export async function createCollectionAction(data: {
 
   if (error || !created) {
     console.error('createCollectionAction error:', error?.message)
-    return { success: false, error: error?.message || 'Failed to create collection.' }
+    return { success: false, error: formatBookmarkError(error, 'Failed to create collection.') }
   }
 
   revalidatePath('/bookmarks')
@@ -144,7 +159,7 @@ export async function updateCollectionAction(data: {
 
   if (error || !updated) {
     console.error('updateCollectionAction error:', error?.message)
-    return { success: false, error: error?.message || 'Failed to update collection.' }
+    return { success: false, error: formatBookmarkError(error, 'Failed to update collection.') }
   }
 
   revalidatePath('/bookmarks')
@@ -181,7 +196,7 @@ export async function deleteCollectionAction(collectionId: string): Promise<Book
 
   if (error) {
     console.error('deleteCollectionAction error:', error.message)
-    return { success: false, error: error.message }
+    return { success: false, error: formatBookmarkError(error, 'Failed to delete collection.') }
   }
 
   revalidatePath('/bookmarks')
@@ -279,18 +294,24 @@ export async function updateThesisCollectionsAction(
       .select('*')
       .single()
 
-    if (!createError && newCol) {
-      newlyCreatedCollection = newCol
-      finalCollectionIds.push(newCol.id)
+    if (createError || !newCol) {
+      return { success: false, error: formatBookmarkError(createError, 'Failed to create collection.') }
     }
+
+    newlyCreatedCollection = newCol
+    finalCollectionIds.push(newCol.id)
   }
 
   // Get current collections for this thesis
-  const { data: existingBookmarks } = await supabase
+  const { data: existingBookmarks, error: fetchBookmarksError } = await supabase
     .from('bookmarks')
     .select('id, collection_id')
     .eq('user_id', user.id)
     .eq('thesis_id', thesisId)
+
+  if (fetchBookmarksError) {
+    return { success: false, error: formatBookmarkError(fetchBookmarksError, 'Failed to access bookmarks.') }
+  }
 
   const currentCollectionIds = (existingBookmarks ?? []).map(b => b.collection_id)
 
@@ -315,7 +336,10 @@ export async function updateThesisCollectionsAction(
       thesis_id: thesisId,
       collection_id,
     }))
-    await supabase.from('bookmarks').insert(rowsToInsert)
+    const { error: insertError } = await supabase.from('bookmarks').insert(rowsToInsert)
+    if (insertError) {
+      return { success: false, error: formatBookmarkError(insertError, 'Failed to save to collection.') }
+    }
   }
 
   revalidatePath('/bookmarks')
