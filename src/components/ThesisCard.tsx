@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import type { ThesisWithRelations } from '@/types/database'
+import BookmarkButton from '@/components/bookmarks/BookmarkButton'
 
 interface ThesisCardProps {
   thesis: ThesisWithRelations
@@ -46,10 +47,17 @@ export default function ThesisCard({ thesis, showActions = false, activeTags = [
 
         <div style={{ padding: '1.25rem 1.375rem', display: 'flex', flexDirection: 'column', gap: '0.875rem', flex: 1 }}>
 
-          {/* College · Program breadcrumb */}
-          <p style={{ fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.09em', textTransform: 'uppercase', color: '#2E6A47', lineHeight: 1 }}>
-            {thesis.college.college_name} · {thesis.program.prog_name}
-          </p>
+          {/* College · Program breadcrumb + Bookmark */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}>
+            <p style={{ fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.09em', textTransform: 'uppercase', color: '#2E6A47', lineHeight: 1.2 }}>
+              {thesis.college.college_name} · {thesis.program.prog_name}
+            </p>
+            <BookmarkButton
+              thesisId={thesis.id}
+              thesisTitle={thesis.title}
+              size="sm"
+            />
+          </div>
 
           {/* Title + Authors */}
           <div>

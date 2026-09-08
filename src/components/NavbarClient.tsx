@@ -11,9 +11,10 @@ interface NavbarClientProps {
 }
 
 const NAV_LINKS = [
-  { href: '/',              label: 'Home'    },
-  { href: '/theses',        label: 'Theses'  },
-  { href: '/theses/upload', label: 'Upload'  },
+  { href: '/',              label: 'Home'      },
+  { href: '/theses',        label: 'Theses'    },
+  { href: '/bookmarks',     label: 'Bookmarks' },
+  { href: '/theses/upload', label: 'Upload'    },
 ]
 
 export default function NavbarClient({ initialUser }: NavbarClientProps) {
@@ -67,6 +68,7 @@ export default function NavbarClient({ initialUser }: NavbarClientProps) {
 
   const menuItems = [
     ...(isAdmin ? [{ href: '/admin', label: 'Admin Dashboard', icon: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z' }] : []),
+    { href: '/bookmarks', label: 'My Bookmarks', icon: 'M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z' },
     { href: '/profile', label: 'Profile', icon: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z' },
     { href: '/theses/upload', label: 'Upload Thesis', icon: 'M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12' },
   ]

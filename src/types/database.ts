@@ -260,6 +260,78 @@ export interface Database {
         }
         Relationships: []
       }
+      collections: {
+        Row: {
+          id: string
+          user_id: string
+          name: string
+          description: string
+          color: string
+          is_default: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          name: string
+          description?: string
+          color?: string
+          is_default?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          name?: string
+          description?: string
+          color?: string
+          is_default?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      bookmarks: {
+        Row: {
+          id: string
+          user_id: string
+          thesis_id: string
+          collection_id: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          thesis_id: string
+          collection_id: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          thesis_id?: string
+          collection_id?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'bookmarks_thesis_id_fkey'
+            columns: ['thesis_id']
+            isOneToOne: false
+            referencedRelation: 'theses'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'bookmarks_collection_id_fkey'
+            columns: ['collection_id']
+            isOneToOne: false
+            referencedRelation: 'collections'
+            referencedColumns: ['id']
+          },
+        ]
+      }
     }
     Views: Record<string, never>
     Functions: {
@@ -288,7 +360,17 @@ export type Tag     = Database['public']['Tables']['tags']['Row']
 export type Thesis  = Database['public']['Tables']['theses']['Row']
 export type UserRole = Database['public']['Tables']['user_roles']['Row']
 export type AuditLog = Database['public']['Tables']['audit_logs']['Row']
+export type Collection = Database['public']['Tables']['collections']['Row']
+export type Bookmark = Database['public']['Tables']['bookmarks']['Row']
 export type ThesisStatus = 'pending' | 'verified' | 'rejected'
+
+export interface CollectionWithCount extends Collection {
+  thesis_count: number
+}
+
+export interface BookmarkWithThesis extends Bookmark {
+  thesis: ThesisWithRelations
+}
 
 /** Thesis with its related college, program, and tags joined */
 export interface ThesisWithRelations extends Thesis {

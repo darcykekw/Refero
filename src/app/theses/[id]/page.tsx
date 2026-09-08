@@ -6,6 +6,7 @@ import { getCurrentUser } from '@/lib/auth'
 import { getThesisById, incrementThesisViews } from '@/lib/data'
 import { getThesisPdfUrl } from '@/lib/storage'
 import { getThesisRecommendations, type SSPaper } from '@/lib/semantic-scholar'
+import BookmarkButton from '@/components/bookmarks/BookmarkButton'
 
 interface PageProps {
   params: Promise<{ id: string }>
@@ -89,14 +90,21 @@ export default async function ThesisDetailPage({ params }: PageProps) {
           </div>
         )}
 
-        {/* Owner actions */}
-        {isOwner && (
-          <div className="flex gap-3 pt-2 border-t border-slate-100">
+        {/* Actions bar: Bookmark & Owner actions */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100">
+          <BookmarkButton
+            thesisId={thesis.id}
+            thesisTitle={thesis.title}
+            variant="button"
+            size="sm"
+          />
+
+          {isOwner && (
             <Link href={`/theses/${thesis.id}/edit`} className="btn btn-ghost btn-sm">
               Edit thesis
             </Link>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* Abstract */}
