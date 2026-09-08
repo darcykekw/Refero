@@ -58,6 +58,22 @@ function LoginForm() {
         </div>
 
         {/* Notices */}
+        {redirectTo?.includes('/theses/upload') && (
+          <div
+            className="mb-5 p-3.5 rounded-xl flex items-center gap-3 text-xs"
+            style={{
+              backgroundColor: '#E7EFE9',
+              border: '1.5px solid #8FA885',
+              color: '#173B28',
+            }}
+          >
+            <span className="text-base">📄</span>
+            <span>
+              <strong>Sign in required:</strong> Please log in to your student or faculty account to upload a thesis to the repository.
+            </span>
+          </div>
+        )}
+
         {resetSuccess && (
           <div className="alert alert-success mb-5 text-sm" role="status">
             ✓ Password updated successfully. Sign in with your new password.
