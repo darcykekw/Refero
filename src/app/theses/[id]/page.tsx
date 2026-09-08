@@ -6,6 +6,7 @@ import { getCurrentUser } from '@/lib/auth'
 import { getThesisById, incrementThesisViews } from '@/lib/data'
 import { getThesisPdfUrl } from '@/lib/storage'
 import { getThesisRecommendations, type SSPaper } from '@/lib/semantic-scholar'
+import { getUserBookmarkMap } from '@/lib/bookmarks'
 import BookmarkButton from '@/components/bookmarks/BookmarkButton'
 
 interface PageProps {
@@ -37,6 +38,7 @@ export default async function ThesisDetailPage({ params }: PageProps) {
     incrementThesisViews(id),
     getThesisPdfUrl(thesis.pdf_file),
   ])
+  const bookmarkMap = user ? await getUserBookmarkMap(user.id) : {}
   const isOwner = user?.id === thesis.uploaded_by
 
   return (
@@ -95,6 +97,7 @@ export default async function ThesisDetailPage({ params }: PageProps) {
           <BookmarkButton
             thesisId={thesis.id}
             thesisTitle={thesis.title}
+            initialIsBookmarked={Boolean(bookmarkMap[thesis.id]?.length)}
             variant="button"
             size="sm"
           />

@@ -69,7 +69,19 @@ export default function BookmarkModal({
         }
       } catch {}
       setCollections(allCols)
-      setSelectedIds(data.selectedCollectionIds ?? [])
+
+      let initialSelected = data.selectedCollectionIds ?? []
+      try {
+        const rawB = localStorage.getItem('refero_user_bookmarks_v1')
+        if (rawB) {
+          const bMap = JSON.parse(rawB)
+          if (bMap[thesisId] && Array.isArray(bMap[thesisId])) {
+            initialSelected = Array.from(new Set([...initialSelected, ...bMap[thesisId]]))
+          }
+        }
+      } catch {}
+
+      setSelectedIds(initialSelected)
       setLoading(false)
     }).catch(err => {
       console.warn('Error fetching bookmark status:', err)
@@ -79,6 +91,19 @@ export default function BookmarkModal({
         if (raw) allCols = JSON.parse(raw)
       } catch {}
       setCollections(allCols)
+
+      let initialSelected: string[] = []
+      try {
+        const rawB = localStorage.getItem('refero_user_bookmarks_v1')
+        if (rawB) {
+          const bMap = JSON.parse(rawB)
+          if (bMap[thesisId] && Array.isArray(bMap[thesisId])) {
+            initialSelected = bMap[thesisId]
+          }
+        }
+      } catch {}
+
+      setSelectedIds(initialSelected)
       setLoading(false)
     })
   }, [isOpen, thesisId])
@@ -118,6 +143,22 @@ export default function BookmarkModal({
       if (res?.success) {
         const finalIds = res.collectionIds ?? selectedIds
         const isBookmarked = finalIds.length > 0
+
+        // Sync local bookmarks and broadcast cross-component update
+        try {
+          const raw = localStorage.getItem('refero_user_bookmarks_v1')
+          const map = raw ? JSON.parse(raw) : {}
+          if (finalIds.length > 0) {
+            map[thesisId] = finalIds
+          } else {
+            delete map[thesisId]
+          }
+          localStorage.setItem('refero_user_bookmarks_v1', JSON.stringify(map))
+          window.dispatchEvent(new CustomEvent('refero-bookmark-changed', {
+            detail: { thesisId, isBookmarked, collectionIds: finalIds }
+          }))
+        } catch {}
+
         if (onStatusChange) {
           onStatusChange(isBookmarked, finalIds)
         }
@@ -156,6 +197,22 @@ export default function BookmarkModal({
         }
 
         const isBookmarked = finalIds.length > 0
+
+        // Sync local bookmarks and broadcast cross-component update
+        try {
+          const raw = localStorage.getItem('refero_user_bookmarks_v1')
+          const map = raw ? JSON.parse(raw) : {}
+          if (finalIds.length > 0) {
+            map[thesisId] = finalIds
+          } else {
+            delete map[thesisId]
+          }
+          localStorage.setItem('refero_user_bookmarks_v1', JSON.stringify(map))
+          window.dispatchEvent(new CustomEvent('refero-bookmark-changed', {
+            detail: { thesisId, isBookmarked, collectionIds: finalIds }
+          }))
+        } catch {}
+
         if (onStatusChange) {
           onStatusChange(isBookmarked, finalIds)
         }

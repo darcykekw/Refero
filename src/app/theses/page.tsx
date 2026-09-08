@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { Suspense } from 'react'
 import { getCurrentUser } from '@/lib/auth'
 import { getThesesList, getAvailableTags, getUserTheses } from '@/lib/data'
+import { getUserBookmarkMap } from '@/lib/bookmarks'
 import ThesisCard from '@/components/ThesisCard'
 import ThesisSearch from '@/components/ThesisSearch'
 
@@ -28,12 +29,11 @@ export default async function ThesesPage({ searchParams }: ThesesPageProps) {
     : []
   const page = Math.max(1, parseInt(params.page ?? '1', 10))
 
-  // The list and the tag panel do not depend on who is asking, so they load
-  // alongside the user lookup instead of waiting on it.
-  const [user, listResult, availableTags] = await Promise.all([
-    getCurrentUser(),
+  const user = await getCurrentUser()
+  const [listResult, availableTags, bookmarkMap] = await Promise.all([
     getThesesList({ query, tagIds, page }),
     getAvailableTags(40),
+    user ? getUserBookmarkMap(user.id) : Promise.resolve({} as Record<string, string[]>),
   ])
 
   // "Your uploads" only appears on the unfiltered list, and only for a signed-in
@@ -146,6 +146,7 @@ export default async function ThesesPage({ searchParams }: ThesesPageProps) {
                 key={thesis.id}
                 thesis={thesis}
                 showActions
+                isBookmarked={Boolean(bookmarkMap[thesis.id]?.length)}
               />
             ))}
           </div>
@@ -165,6 +166,7 @@ export default async function ThesesPage({ searchParams }: ThesesPageProps) {
               key={thesis.id}
               thesis={thesis}
               activeTags={availableTags.filter(t => tagIds.includes(t.id)).map(t => t.name)}
+              isBookmarked={Boolean(bookmarkMap[thesis.id]?.length)}
             />
           ))}
         </div>

@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { Suspense } from 'react'
 import { getCurrentUser } from '@/lib/auth'
 import { getSiteStats, getFeaturedTheses, getAllPrograms } from '@/lib/data'
+import { getUserBookmarkMap } from '@/lib/bookmarks'
 import ThesisCard from '@/components/ThesisCard'
 import ProgramCarousel from '@/components/ProgramCarousel'
 
@@ -18,11 +19,12 @@ interface HomePageProps {
 export default async function HomePage({ searchParams }: HomePageProps) {
   const { program: programId } = await searchParams
 
-  const [user, stats, programs, featured] = await Promise.all([
-    getCurrentUser(),
+  const user = await getCurrentUser()
+  const [stats, programs, featured, bookmarkMap] = await Promise.all([
     getSiteStats(),
     getAllPrograms(),
     getFeaturedTheses(programId),
+    user ? getUserBookmarkMap(user.id) : Promise.resolve({} as Record<string, string[]>),
   ])
 
   const displayName = user?.user_metadata?.full_name
@@ -172,7 +174,11 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         {featured.length > 0 ? (
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {featured.map(thesis => (
-              <ThesisCard key={thesis.id} thesis={thesis} />
+              <ThesisCard
+                key={thesis.id}
+                thesis={thesis}
+                isBookmarked={Boolean(bookmarkMap[thesis.id]?.length)}
+              />
             ))}
           </div>
         ) : (

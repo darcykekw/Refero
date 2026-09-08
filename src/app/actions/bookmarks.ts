@@ -384,8 +384,10 @@ export async function updateThesisCollectionsAction(
     }
 
     try {
-      revalidatePath('/bookmarks')
+      revalidatePath('/')
       revalidatePath('/theses')
+      revalidatePath('/bookmarks')
+      revalidatePath('/profile')
       revalidatePath(`/theses/${thesisId}`)
     } catch {}
 

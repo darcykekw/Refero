@@ -8,9 +8,15 @@ interface ThesisCardProps {
   thesis: ThesisWithRelations
   showActions?: boolean
   activeTags?: string[]
+  isBookmarked?: boolean
 }
 
-export default function ThesisCard({ thesis, showActions = false, activeTags = [] }: ThesisCardProps) {
+export default function ThesisCard({
+  thesis,
+  showActions = false,
+  activeTags = [],
+  isBookmarked = false,
+}: ThesisCardProps) {
   const abstract = thesis.abstract.length > 180
     ? thesis.abstract.slice(0, 180).trimEnd() + '…'
     : thesis.abstract
@@ -55,6 +61,7 @@ export default function ThesisCard({ thesis, showActions = false, activeTags = [
             <BookmarkButton
               thesisId={thesis.id}
               thesisTitle={thesis.title}
+              initialIsBookmarked={isBookmarked}
               size="sm"
             />
           </div>
