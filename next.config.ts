@@ -2,6 +2,9 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   reactCompiler: true,
+  serverActions: {
+    bodySizeLimit: '25mb',
+  },
   images: {
     remotePatterns: [
       // Supabase Storage
