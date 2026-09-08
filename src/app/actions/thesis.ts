@@ -152,7 +152,8 @@ export async function uploadThesis(
     } catch {
       user = null
     }
-    const userId = user?.id || '00000000-0000-0000-0000-000000000000'
+    if (!user) return { error: 'You must be signed in to upload a thesis.' }
+    const userId = user.id
 
     const fields = parseFormFields(formData)
     const validationError = validateFields(fields, true)
@@ -184,76 +185,30 @@ export async function uploadThesis(
       // Non-fatal if tables do not exist
     }
 
-    // Insert the thesis.
-    let thesis: { id: string } | null = null
-    let insertError: any = null
-
-    try {
-      const res = await supabase
-        .from('theses')
-        .insert({
-          title:          fields.title,
-          abstract:       fields.abstract,
-          authors:        fields.authors,
-          adviser:        fields.adviser,
-          year_submitted: parseInt(fields.yearStr, 10),
-          college_id:     fields.collegeId,
-          program_id:     fields.programId,
-          panel_score:    fields.panelScoreStr ? parseFloat(fields.panelScoreStr) : null,
-          pdf_file:       uploadResult.path,
-          uploaded_by:    userId,
-          view_count:     0,
-        })
-        .select('id')
-        .single()
-      thesis = res.data
-      insertError = res.error
-    } catch (err) {
-      insertError = err
-    }
+    // Insert the thesis using admin client to bypass RLS.
+    // The service-role key skips RLS while still storing the real user ID.
+    const adminClient = createAdminClient()
+    const { data: thesis, error: insertError } = await adminClient
+      .from('theses')
+      .insert({
+        title:          fields.title,
+        abstract:       fields.abstract,
+        authors:        fields.authors,
+        adviser:        fields.adviser,
+        year_submitted: parseInt(fields.yearStr, 10),
+        college_id:     fields.collegeId,
+        program_id:     fields.programId,
+        panel_score:    fields.panelScoreStr ? parseFloat(fields.panelScoreStr) : null,
+        pdf_file:       uploadResult.path,
+        uploaded_by:    userId,
+        view_count:     0,
+      })
+      .select('id')
+      .single()
 
     if (insertError || !thesis) {
-      console.warn('Thesis insert error in Supabase, using local fallback:', insertError)
-      const localId = 'd' + Date.now().toString(16).padStart(7, '0') + '-0000-0000-0000-' + Math.random().toString(16).slice(2, 14).padEnd(12, '0')
-      const selectedCollege = DEFAULT_COLLEGES.find(c => c.id === fields.collegeId) ?? DEFAULT_COLLEGES[0]
-      const selectedProgram = DEFAULT_PROGRAMS.find(p => p.id === fields.programId) ?? DEFAULT_PROGRAMS[0]
-      const selectedTags = fields.tagIds.map(id => DEFAULT_TAGS.find(t => t.id === id)).filter(Boolean) as Tag[]
-      if (fields.newTagsStr) {
-        const extra = fields.newTagsStr.split(',').map(n => n.trim()).filter(Boolean).map(name => ({
-          id: 'a' + Math.random().toString(16).slice(2, 9).padEnd(7, '0') + '-0000-0000-0000-000000000001',
-          name,
-          date_added: new Date().toISOString(),
-          date_modified: new Date().toISOString(),
-        }))
-        selectedTags.push(...extra)
-      }
-
-      const localThesisRecord: ThesisWithRelations = {
-        id: localId,
-        title: fields.title,
-        abstract: fields.abstract,
-        authors: fields.authors,
-        adviser: fields.adviser,
-        year_submitted: parseInt(fields.yearStr, 10),
-        college_id: fields.collegeId,
-        program_id: fields.programId,
-        panel_score: fields.panelScoreStr ? parseFloat(fields.panelScoreStr) : null,
-        pdf_file: uploadResult.path,
-        uploaded_by: userId,
-        view_count: 0,
-        ss_paper_id: null,
-        status: 'pending',
-        date_added: new Date().toISOString(),
-        date_modified: new Date().toISOString(),
-        college: selectedCollege,
-        program: selectedProgram,
-        tags: selectedTags,
-      }
-
-      return {
-        success: true,
-        localThesis: localThesisRecord,
-      }
+      console.error('Thesis insert error:', insertError)
+      return { error: insertError?.message || 'Failed to save thesis. Please try again.' }
     }
 
     try {

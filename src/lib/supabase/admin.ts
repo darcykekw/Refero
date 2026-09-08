@@ -13,11 +13,13 @@ import type { Database } from '@/types/database'
 
 export function createAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
   if (!url || !serviceKey) {
     throw new Error(
-      'Missing Supabase environment variables: NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be defined. If you are deploying on Vercel, please add these in Project Settings > Environment Variables.'
+      'Missing Supabase environment variables: NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be defined. ' +
+      'In Vercel, go to Project Settings > Environment Variables and add SUPABASE_SERVICE_ROLE_KEY. ' +
+      'You can find this key in your Supabase dashboard under Project Settings > API.'
     )
   }
 
