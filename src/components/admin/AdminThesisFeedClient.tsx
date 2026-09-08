@@ -578,7 +578,9 @@ export default function AdminThesisFeedClient({
                 >
                   <option value="verified">Verified (Visible in Public Feed)</option>
                   <option value="pending">Pending Review</option>
-                  <option value="rejected">Rejected</option>
+                  {editingThesis?.status !== 'verified' && (
+                    <option value="rejected">Rejected</option>
+                  )}
                 </select>
               </div>
 

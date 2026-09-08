@@ -1,8 +1,9 @@
 'use client'
 
-import { useActionState, useState } from 'react'
+import { useActionState, useState, useEffect } from 'react'
 import type { College, Program, Tag, ThesisWithRelations } from '@/types/database'
 import type { ThesisActionState } from '@/app/actions/thesis'
+import { DEFAULT_COLLEGES, DEFAULT_PROGRAMS, DEFAULT_TAGS } from '@/lib/constants/programs'
 
 type ActionFn = (prev: ThesisActionState, formData: FormData) => Promise<ThesisActionState>
 
@@ -30,13 +31,41 @@ export default function ThesisFormClient({
 }: ThesisFormClientProps) {
   const [state, formAction, pending] = useActionState<ThesisActionState, FormData>(action, {})
 
-  const [selectedCollegeId, setSelectedCollegeId] = useState(initialData?.college_id ?? '')
+  const effectiveColleges = colleges && colleges.length > 0 ? colleges : DEFAULT_COLLEGES
+  const effectivePrograms = programs && programs.length > 0 ? programs : DEFAULT_PROGRAMS
+  const effectiveTags = tags && tags.length > 0 ? tags : DEFAULT_TAGS
+
+  const initialCollegeId = initialData?.college_id || (effectiveColleges.length === 1 ? effectiveColleges[0].id : '')
+  const [selectedCollegeId, setSelectedCollegeId] = useState(initialCollegeId)
   const [selectedProgramId, setSelectedProgramId] = useState(initialData?.program_id ?? '')
 
-  const filteredPrograms = programs.filter(p => p.college_id === selectedCollegeId)
+  const filteredPrograms = effectivePrograms.filter(
+    p => !selectedCollegeId || p.college_id === selectedCollegeId || effectiveColleges.length === 1
+  )
   const hasNoPrograms = selectedCollegeId !== '' && filteredPrograms.length === 0
 
-  const existingTagIds = new Set(initialData?.tags.map(t => t.id) ?? [])
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>(() => {
+    return initialData?.tags?.map(t => t.id) ?? []
+  })
+
+  useEffect(() => {
+    if (state.success && state.localThesis) {
+      try {
+        const raw = localStorage.getItem('refero_user_theses_v1')
+        const existing: ThesisWithRelations[] = raw ? JSON.parse(raw) : []
+        const updated = [state.localThesis, ...existing.filter(t => t.id !== state.localThesis!.id)]
+        localStorage.setItem('refero_user_theses_v1', JSON.stringify(updated))
+
+        window.dispatchEvent(new CustomEvent('refero-thesis-uploaded', {
+          detail: { thesis: state.localThesis }
+        }))
+      } catch (err) {
+        console.warn('Failed to save thesis locally:', err)
+      }
+
+      window.location.href = '/theses?uploaded=true'
+    }
+  }, [state.success, state.localThesis])
 
   return (
     <form action={formAction} className="space-y-6">
@@ -169,7 +198,7 @@ export default function ThesisFormClient({
             className="input"
           >
             <option value="">Select a college…</option>
-            {colleges.map(c => (
+            {effectiveColleges.map(c => (
               <option key={c.id} value={c.id}>{c.college_name}</option>
             ))}
           </select>
@@ -247,26 +276,64 @@ export default function ThesisFormClient({
         <p className="text-xs text-slate-400 mt-1">PDF only, max 20 MB</p>
       </div>
 
-      {/* Tags */}
-      {tags.length > 0 && (
-        <div>
-          <p className="block text-sm font-medium text-slate-700 mb-2">Tags</p>
-          <div className="flex flex-wrap gap-2 p-3 border border-slate-200 rounded-xl bg-slate-50 max-h-40 overflow-y-auto">
-            {tags.map(tag => (
-              <label key={tag.id} className="flex items-center gap-1.5 cursor-pointer">
-                <input
-                  type="checkbox"
-                  name="tag_ids"
-                  value={tag.id}
-                  defaultChecked={existingTagIds.has(tag.id)}
-                  className="rounded border-slate-300 text-sky-600 focus:ring-sky-500"
-                />
-                <span className="text-sm text-slate-700">{tag.name}</span>
-              </label>
-            ))}
-          </div>
+      {/* Existing Tags Dropdown */}
+      <div>
+        <label htmlFor="thesis-tags-dropdown" className="block text-sm font-medium text-slate-700 mb-1">
+          Existing Tags <span className="text-slate-400 font-normal">(select from dropdown)</span>
+        </label>
+        <div className="space-y-3">
+          <select
+            id="thesis-tags-dropdown"
+            value=""
+            onChange={e => {
+              const val = e.target.value
+              if (val && !selectedTagIds.includes(val)) {
+                setSelectedTagIds(prev => [...prev, val])
+              }
+              e.target.value = ''
+            }}
+            className="input"
+          >
+            <option value="">Select an existing tag to add…</option>
+            {effectiveTags
+              .filter(t => !selectedTagIds.includes(t.id))
+              .map(t => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+          </select>
+
+          {/* Selected Tag Badges */}
+          {selectedTagIds.length > 0 ? (
+            <div className="flex flex-wrap gap-2 p-3 border border-emerald-900/20 rounded-xl bg-emerald-50/40 min-h-[44px] items-center">
+              {selectedTagIds.map(id => {
+                const tag = effectiveTags.find(t => t.id === id) || initialData?.tags?.find(t => t.id === id)
+                const name = tag?.name ?? id
+                return (
+                  <span
+                    key={id}
+                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-900 border border-emerald-300 shadow-xs"
+                  >
+                    <input type="hidden" name="tag_ids" value={id} />
+                    <span>{name}</span>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedTagIds(prev => prev.filter(tid => tid !== id))}
+                      className="hover:text-red-700 hover:bg-emerald-200/80 rounded-full w-4 h-4 inline-flex items-center justify-center transition-colors font-bold text-sm"
+                      aria-label={`Remove ${name}`}
+                    >
+                      ×
+                    </button>
+                  </span>
+                )
+              })}
+            </div>
+          ) : (
+            <p className="text-xs text-slate-400 italic">No existing tags selected. Use the dropdown above to choose tags.</p>
+          )}
         </div>
-      )}
+      </div>
 
       {/* New tags */}
       <div>

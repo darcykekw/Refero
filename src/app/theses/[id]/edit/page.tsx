@@ -8,6 +8,9 @@ import { getThesisPdfUrl } from '@/lib/storage'
 import { updateThesis, deleteThesis } from '@/app/actions/thesis'
 import ThesisFormClient from '@/components/ThesisFormClient'
 import DeleteThesisButton from '@/components/DeleteThesisButton'
+import { DEFAULT_COLLEGES, DEFAULT_PROGRAMS, DEFAULT_TAGS } from '@/lib/constants/programs'
+
+export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = { title: 'Edit Thesis' }
 
@@ -22,8 +25,8 @@ export default async function EditThesisPage({ params, searchParams }: PageProps
 
   // The thesis is needed for the ownership check, so it loads with the user.
   const [user, thesis] = await Promise.all([
-    getCurrentUser(),
-    getThesisById(id),
+    getCurrentUser().catch(() => null),
+    getThesisById(id).catch(() => null),
   ])
 
   if (!user) redirect(`/login?redirectTo=/theses/${id}/edit`)
@@ -33,10 +36,10 @@ export default async function EditThesisPage({ params, searchParams }: PageProps
   if (thesis.uploaded_by !== user.id) redirect(`/theses/${id}`)
 
   const [colleges, programs, tags, pdfUrl] = await Promise.all([
-    getAllColleges(),
-    getAllPrograms(),
-    getAvailableTags(100),
-    getThesisPdfUrl(thesis.pdf_file),
+    getAllColleges().catch(() => DEFAULT_COLLEGES),
+    getAllPrograms().catch(() => DEFAULT_PROGRAMS),
+    getAvailableTags(100).catch(() => DEFAULT_TAGS),
+    getThesisPdfUrl(thesis.pdf_file).catch(() => null),
   ])
 
   const deleteAction = deleteThesis.bind(null, thesis.id)

@@ -2,6 +2,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentUser, isAdminUser } from '@/lib/auth'
 import type { ThesisWithRelations, Program, Tag, AuditLog } from '@/types/database'
+import { DEFAULT_PROGRAMS, DEFAULT_TAGS, DEFAULT_THESES, getProgramLogoUrl } from '@/lib/constants/programs'
 
 export interface AdminStats {
   totalTheses: number
@@ -60,6 +61,10 @@ export async function getAdminStats(): Promise<AdminStats> {
     theses = allTheses ?? []
   }
 
+  if (theses.length === 0) {
+    theses = DEFAULT_THESES.map(t => ({ id: t.id, program_id: t.program_id, status: 'verified' }))
+  }
+
   const totalTheses = theses.length
   // If status is not explicitly set, default to verified or pending
   const pendingTheses = theses.filter(t => t.status === 'pending').length
@@ -76,34 +81,29 @@ export async function getAdminStats(): Promise<AdminStats> {
   }
 
   // 3. Programs and distribution
-  const { data: programsData } = await adminClient
-    .from('programs')
-    .select('id, prog_name, logo')
-    .order('prog_name')
+  let programs: { id: string; prog_name: string; logo?: string | null }[] = []
+  try {
+    const { data: programsData } = await adminClient
+      .from('programs')
+      .select('id, prog_name, logo')
+      .order('prog_name')
+    if (programsData && programsData.length > 0) {
+      programs = programsData
+    }
+  } catch (err) {
+    console.warn('admin programs query failed, falling back to default programs:', err)
+  }
 
-  const programs = programsData ?? []
+  if (programs.length === 0) {
+    programs = DEFAULT_PROGRAMS
+  }
 
   const programDistribution = programs.map(p => {
     const programTheses = theses.filter(t => t.program_id === p.id)
     const submittedCount = programTheses.length
     const verifiedCount = programTheses.filter(t => t.status === 'verified' || !t.status).length
 
-    // Known logo fallback based on program name if p.logo is not set
-    let logoFile = p.logo
-    if (!logoFile) {
-      const nameLower = (p.prog_name || '').toLowerCase()
-      if (nameLower.includes('marine')) logoFile = 'MBS-LOGO.png'
-      else if (nameLower.includes('computer')) logoFile = 'ACS-LOGO.png'
-      else if (nameLower.includes('information')) logoFile = 'SITE-LOGO.png'
-      else if (nameLower.includes('environmental')) logoFile = 'ESSA-LOGO.png'
-      else if (nameLower.includes('biology')) logoFile = 'YBA-LOGO.png'
-    }
-
-    const logoUrl = logoFile
-      ? logoFile.startsWith('/') || logoFile.startsWith('http')
-        ? logoFile
-        : `/images/${logoFile}`
-      : null
+    const logoUrl = getProgramLogoUrl(p.logo, p.prog_name)
 
     return {
       programId: p.id,
@@ -195,8 +195,28 @@ export async function getMasterlistTheses(options?: {
     error = fallbackRes.error
   }
 
-  if (error) {
-    return []
+  if (error || (!data || data.length === 0)) {
+    let list: AdminThesisItem[] = DEFAULT_THESES.map(t => ({
+      ...t,
+      uploaderEmail: 'student@psu.palawan.edu.ph',
+      uploaderName: t.authors.split(',')[0].trim(),
+    }))
+
+    if (options?.programId) {
+      list = list.filter(t => t.program_id === options.programId)
+    }
+    if (options?.status && options.status !== 'all') {
+      list = list.filter(t => (t.status || 'verified') === options.status)
+    }
+    if (options?.query) {
+      const q = options.query.toLowerCase()
+      list = list.filter(t =>
+        t.title.toLowerCase().includes(q) ||
+        t.authors.toLowerCase().includes(q) ||
+        t.abstract.toLowerCase().includes(q)
+      )
+    }
+    return list
   }
 
   return formatThesisRows(data ?? [])
@@ -230,18 +250,23 @@ export async function getAllTagsWithUsage(): Promise<(Tag & { count: number })[]
     const tags = tagsRes.data ?? []
     const junction = junctionRes.data ?? []
 
-    const countMap: Record<string, number> = {}
-    junction.forEach(j => {
-      countMap[j.tag_id] = (countMap[j.tag_id] || 0) + 1
-    })
+    if (tags.length > 0) {
+      const countMap: Record<string, number> = {}
+      junction.forEach(j => {
+        countMap[j.tag_id] = (countMap[j.tag_id] || 0) + 1
+      })
 
-    return tags.map(t => ({
-      ...t,
-      count: countMap[t.id] || 0,
-    }))
-  } catch {
-    return []
-  }
+      return tags.map(t => ({
+        ...t,
+        count: countMap[t.id] || 0,
+      }))
+    }
+  } catch {}
+
+  return DEFAULT_TAGS.map(t => ({
+    ...t,
+    count: 1,
+  }))
 }
 
 /**

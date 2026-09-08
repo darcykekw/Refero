@@ -28,6 +28,8 @@ export default async function ProfilePage() {
     getBookmarkedTheses(user.id),
   ])
 
+  const bookmarkedSet = new Set((bookmarkData?.items ?? []).map(b => b.thesis?.id).filter(Boolean))
+
   return (
     <div className="w-full max-w-5xl page-gutter py-6 sm:py-10 space-y-6 sm:space-y-8">
 
@@ -116,7 +118,7 @@ export default async function ProfilePage() {
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {theses.map(thesis => (
             <div key={thesis.id} className="relative group">
-              <ThesisCard thesis={thesis} />
+              <ThesisCard thesis={thesis} isBookmarked={bookmarkedSet.has(thesis.id)} />
               {/* Overlay edit/delete controls */}
               <div className="absolute bottom-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                 <Link

@@ -1,11 +1,13 @@
 'use client'
 
 import { useState, useEffect, useTransition } from 'react'
+import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import type { Collection } from '@/types/database'
 import {
   getThesisBookmarkStatusAction,
   updateThesisCollectionsAction,
+  type BookmarkActionResult,
 } from '@/app/actions/bookmarks'
 
 interface BookmarkModalProps {
@@ -35,6 +37,7 @@ export default function BookmarkModal({
   onStatusChange,
 }: BookmarkModalProps) {
   const router = useRouter()
+  const [mounted, setMounted] = useState(false)
   const [loading, setLoading] = useState(true)
   const [isSignedIn, setIsSignedIn] = useState(true)
   const [collections, setCollections] = useState<Collection[]>([])
@@ -48,6 +51,20 @@ export default function BookmarkModal({
   const [newColColor, setNewColColor] = useState('#2E6A47')
 
   useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  // Lock body scroll when modal is open to prevent page jumps
+  useEffect(() => {
+    if (!isOpen) return
+    const orig = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = orig
+    }
+  }, [isOpen])
+
+  useEffect(() => {
     if (!isOpen) return
 
     setLoading(true)
@@ -57,11 +74,52 @@ export default function BookmarkModal({
 
     getThesisBookmarkStatusAction(thesisId).then(data => {
       setIsSignedIn(data.isSignedIn)
-      setCollections(data.collections)
-      setSelectedIds(data.selectedCollectionIds)
+      let allCols = data.collections ?? []
+      try {
+        const raw = localStorage.getItem('refero_user_collections_v1')
+        if (raw) {
+          const localCols: Collection[] = JSON.parse(raw)
+          const existingIds = new Set(allCols.map(c => c.id))
+          const toAdd = localCols.filter(c => !existingIds.has(c.id))
+          allCols = [...allCols, ...toAdd]
+        }
+      } catch {}
+      setCollections(allCols)
+
+      let initialSelected = data.selectedCollectionIds ?? []
+      try {
+        const rawB = localStorage.getItem('refero_user_bookmarks_v1')
+        if (rawB) {
+          const bMap = JSON.parse(rawB)
+          if (bMap[thesisId] && Array.isArray(bMap[thesisId])) {
+            initialSelected = Array.from(new Set([...initialSelected, ...bMap[thesisId]]))
+          }
+        }
+      } catch {}
+
+      setSelectedIds(initialSelected)
       setLoading(false)
     }).catch(err => {
-      console.error('Error fetching bookmark status:', err)
+      console.warn('Error fetching bookmark status:', err)
+      let allCols: Collection[] = []
+      try {
+        const raw = localStorage.getItem('refero_user_collections_v1')
+        if (raw) allCols = JSON.parse(raw)
+      } catch {}
+      setCollections(allCols)
+
+      let initialSelected: string[] = []
+      try {
+        const rawB = localStorage.getItem('refero_user_bookmarks_v1')
+        if (rawB) {
+          const bMap = JSON.parse(rawB)
+          if (bMap[thesisId] && Array.isArray(bMap[thesisId])) {
+            initialSelected = bMap[thesisId]
+          }
+        }
+      } catch {}
+
+      setSelectedIds(initialSelected)
       setLoading(false)
     })
   }, [isOpen, thesisId])
@@ -76,7 +134,7 @@ export default function BookmarkModal({
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [isOpen, onClose])
 
-  if (!isOpen) return null
+  if (!isOpen || !mounted) return null
 
   const toggleCollection = (colId: string) => {
     setSelectedIds(prev =>
@@ -86,37 +144,75 @@ export default function BookmarkModal({
 
   const handleSave = () => {
     startTransition(async () => {
-      const res = await updateThesisCollectionsAction(
-        thesisId,
-        selectedIds,
-        showNewForm && newColName.trim() ? newColName.trim() : undefined,
-        newColColor
-      )
-
-      if (res.success) {
-        const finalIds = res.collectionIds ?? selectedIds
-        const isBookmarked = finalIds.length > 0
-        if (onStatusChange) {
-          onStatusChange(isBookmarked, finalIds)
-        }
-        setToast({
-          message: isBookmarked ? 'Saved to collections!' : 'Removed from collections.',
-          type: 'success',
-        })
-        router.refresh()
-        setTimeout(() => {
-          onClose()
-        }, 600)
-      } else {
-        setToast({
-          message: res.error || 'Failed to update bookmarks.',
-          type: 'error',
-        })
+      let res: BookmarkActionResult | null = null
+      try {
+        res = await updateThesisCollectionsAction(
+          thesisId,
+          selectedIds,
+          showNewForm && newColName.trim() ? newColName.trim() : undefined,
+          newColColor
+        )
+      } catch (err) {
+        console.warn('updateThesisCollectionsAction error:', err)
       }
+
+      const finalIds = res?.success
+        ? (res.collectionIds ?? selectedIds)
+        : [...selectedIds]
+
+      if (!res?.success && showNewForm && newColName.trim()) {
+        const localId = 'col_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7)
+        const newLocalCol = {
+          id: localId,
+          user_id: 'local',
+          name: newColName.trim(),
+          description: '',
+          color: newColColor,
+          is_default: false,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          thesis_count: 1,
+        }
+        finalIds.push(localId)
+        try {
+          const raw = localStorage.getItem('refero_user_collections_v1')
+          const existing = raw ? JSON.parse(raw) : []
+          localStorage.setItem('refero_user_collections_v1', JSON.stringify([...existing, newLocalCol]))
+        } catch {}
+      }
+
+      const isBookmarked = finalIds.length > 0
+
+      // Sync local bookmarks and broadcast cross-component update
+      try {
+        const raw = localStorage.getItem('refero_user_bookmarks_v1')
+        const map = raw ? JSON.parse(raw) : {}
+        if (finalIds.length > 0) {
+          map[thesisId] = finalIds
+        } else {
+          delete map[thesisId]
+        }
+        localStorage.setItem('refero_user_bookmarks_v1', JSON.stringify(map))
+        window.dispatchEvent(new CustomEvent('refero-bookmark-changed', {
+          detail: { thesisId, isBookmarked, collectionIds: finalIds }
+        }))
+      } catch {}
+
+      if (onStatusChange) {
+        onStatusChange(isBookmarked, finalIds)
+      }
+
+      // Close modal immediately so UI doesn't stutter/freeze
+      onClose()
+
+      // Refresh server components in background
+      try {
+        router.refresh()
+      } catch {}
     })
   }
 
-  return (
+  return createPortal(
     <div
       role="dialog"
       aria-modal="true"
@@ -124,7 +220,7 @@ export default function BookmarkModal({
       style={{
         position: 'fixed',
         inset: 0,
-        zIndex: 100,
+        zIndex: 9999,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -513,6 +609,7 @@ export default function BookmarkModal({
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

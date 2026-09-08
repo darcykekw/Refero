@@ -363,7 +363,9 @@ export default function ThesisMasterlistTable({
                   >
                     <option value="verified">Verified</option>
                     <option value="pending">Pending</option>
-                    <option value="rejected">Rejected</option>
+                    {editingThesis?.status !== 'verified' && (
+                      <option value="rejected">Rejected</option>
+                    )}
                   </select>
                 </div>
               </div>

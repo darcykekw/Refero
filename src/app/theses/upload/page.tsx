@@ -5,7 +5,10 @@ import { Suspense } from 'react'
 import { getCurrentUser } from '@/lib/auth'
 import { getAllColleges, getAllPrograms, getAvailableTags } from '@/lib/data'
 import { uploadThesis } from '@/app/actions/thesis'
+import { DEFAULT_COLLEGES, DEFAULT_PROGRAMS, DEFAULT_TAGS } from '@/lib/constants/programs'
 import ThesisFormClient from '@/components/ThesisFormClient'
+
+export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
   title: 'Upload Thesis',
@@ -17,9 +20,9 @@ export default async function UploadPage() {
   if (!user) redirect('/login?redirectTo=/theses/upload')
 
   const [colleges, programs, tags] = await Promise.all([
-    getAllColleges(),
-    getAllPrograms(),
-    getAvailableTags(100),
+    getAllColleges().catch(() => DEFAULT_COLLEGES),
+    getAllPrograms().catch(() => DEFAULT_PROGRAMS),
+    getAvailableTags(100).catch(() => DEFAULT_TAGS),
   ])
 
   return (

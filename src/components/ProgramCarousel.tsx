@@ -4,6 +4,7 @@ import Image from 'next/image'
 import { useRef, useState, useEffect, useCallback, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import type { Program } from '@/types/database'
+import { DEFAULT_PROGRAMS, getProgramLogoUrl } from '@/lib/constants/programs'
 
 interface ProgramCarouselProps {
   programs: Program[]
@@ -16,6 +17,36 @@ const SLIDE_WIDTH_PCT = 60
 const SLIDE_GAP = '1.5rem'
 const CENTRE_OFFSET_PCT = (100 - SLIDE_WIDTH_PCT) / 2
 const AUTO_ADVANCE_MS = 5000
+
+interface FloatingSheet {
+  id: number
+  src: string
+  top: string
+  left: string
+  width: number
+  rotate: number
+  speed: number
+  opacity: number
+}
+
+const FLOATING_SHEETS: FloatingSheet[] = [
+  // Far Left
+  { id: 1, src: '/images/sheets/sheet_3.png', top: '8%', left: '2%', width: 100, rotate: -14, speed: 1.25, opacity: 0.95 },
+  { id: 2, src: '/images/sheets/sheet_12.png', top: '56%', left: '3%', width: 88, rotate: 4, speed: 0.85, opacity: 0.92 },
+  // Mid-Left
+  { id: 3, src: '/images/sheets/sheet_6.png', top: '30%', left: '16%', width: 114, rotate: -8, speed: 1.15, opacity: 0.96 },
+  { id: 4, src: '/images/sheets/sheet_2.png', top: '8%', left: '26%', width: 112, rotate: 9, speed: 1.35, opacity: 0.95 },
+  { id: 5, src: '/images/sheets/sheet_8.png', top: '22%', left: '38%', width: 95, rotate: 16, speed: 0.95, opacity: 0.90 },
+  { id: 6, src: '/images/sheets/sheet_11.png', top: '68%', left: '27%', width: 116, rotate: -8, speed: 1.1, opacity: 0.94 },
+  // Center-Right
+  { id: 7, src: '/images/sheets/sheet_7.png', top: '26%', left: '60%', width: 130, rotate: -6, speed: 1.0, opacity: 0.96 },
+  { id: 8, src: '/images/sheets/sheet_4.png', top: '10%', left: '71%', width: 110, rotate: 12, speed: 1.25, opacity: 0.94 },
+  // Far Right
+  { id: 9, src: '/images/sheets/sheet_1.png', top: '8%', left: '83%', width: 102, rotate: -14, speed: 1.2, opacity: 0.92 },
+  { id: 10, src: '/images/sheets/sheet_13.png', top: '22%', left: '85%', width: 122, rotate: -8, speed: 0.9, opacity: 0.95 },
+  { id: 11, src: '/images/sheets/sheet_10.png', top: '63%', left: '75%', width: 120, rotate: 6, speed: 1.15, opacity: 0.92 },
+]
+
 
 
 export default function ProgramCarousel({ programs, activeProgramId }: ProgramCarouselProps) {
@@ -37,9 +68,11 @@ export default function ProgramCarousel({ programs, activeProgramId }: ProgramCa
   const slideGap = isMobile ? '1rem' : '1.5rem'
   const centreOffsetPct = (100 - slideWidthPct) / 2
 
+  const effectivePrograms = programs && programs.length > 0 ? programs : DEFAULT_PROGRAMS
+
   const items: CarouselItem[] = useMemo(
-    () => [{ id: null, prog_name: 'All Programs', logo: '' }, ...programs],
-    [programs]
+    () => [{ id: null, prog_name: 'All Programs', logo: '' }, ...effectivePrograms],
+    [effectivePrograms]
   )
 
   const [userEngaged, setUserEngaged] = useState(false)
@@ -65,14 +98,18 @@ export default function ProgramCarousel({ programs, activeProgramId }: ProgramCa
 
       const program = items[idx]
       const params = new URLSearchParams(searchParams.toString())
-      if (program.id) params.set('program', program.id)
-      else params.delete('program')
+      if (program.id && program.id !== activeProgramId) {
+        params.set('program', program.id)
+      } else {
+        params.delete('program')
+      }
 
       const qs = params.toString()
       router.push(qs ? `/?${qs}` : '/', { scroll: false })
     },
-    [items, router, searchParams, activeIndex]
+    [items, router, searchParams, activeIndex, activeProgramId]
   )
+
 
   const showPrev = useCallback(() => show(current - 1), [show, current])
   const showNext = useCallback(() => show(current + 1), [show, current])
@@ -104,6 +141,7 @@ export default function ProgramCarousel({ programs, activeProgramId }: ProgramCa
   const touchStartX = useRef(0)
   const cardRef = useRef<HTMLDivElement>(null)
   const alcheRef = useRef<HTMLDivElement>(null)
+  const sheetRefs = useRef<(HTMLDivElement | null)[]>([])
 
   useEffect(() => {
     let ticking = false
@@ -123,6 +161,16 @@ export default function ProgramCarousel({ programs, activeProgramId }: ProgramCa
       const rotate = -8 + (progress - 0.5) * 10
 
       alcheRef.current.style.transform = `translate(-50%, calc(-50% + ${translateY}px)) rotate(${rotate}deg) scale(1.22)`
+
+      // Move the floating sheets against (opposite direction to) alche during scroll
+      sheetRefs.current.forEach((el, idx) => {
+        if (!el) return
+        const sheet = FLOATING_SHEETS[idx]
+        if (!sheet) return
+        const sheetY = -(progress - 0.5) * 220 * sheet.speed
+        const sheetRot = sheet.rotate - (progress - 0.5) * 10
+        el.style.transform = `translate3d(0, ${sheetY}px, 0) rotate(${sheetRot}deg)`
+      })
 
       ticking = false
     }
@@ -208,6 +256,40 @@ export default function ProgramCarousel({ programs, activeProgramId }: ProgramCa
           />
         </div>
 
+        {/* Floating parallax sheet music / papers */}
+        <div 
+          aria-hidden="true" 
+          className="absolute inset-0 pointer-events-none overflow-hidden"
+          style={{ zIndex: 1 }}
+        >
+          {FLOATING_SHEETS.map((sheet, idx) => (
+            <div
+              key={sheet.id}
+              ref={el => { sheetRefs.current[idx] = el }}
+              className={`absolute will-change-transform pointer-events-none select-none transition-transform duration-75 ease-out ${
+                sheet.id === 1 || sheet.id === 9 || sheet.id === 2 || sheet.id === 10 ? 'hidden sm:block' : ''
+              }`}
+              style={{
+                top: sheet.top,
+                left: sheet.left,
+                width: `${sheet.width}px`,
+                opacity: sheet.opacity,
+                transform: `rotate(${sheet.rotate}deg)`,
+                filter: 'drop-shadow(0 10px 20px rgba(0,0,0,0.65)) contrast(1.1) brightness(1.08)',
+              }}
+            >
+              <Image
+                src={sheet.src}
+                alt=""
+                width={sheet.width}
+                height={Math.round(sheet.width * 0.8)}
+                style={{ width: '100%', height: 'auto' }}
+                className="w-full h-auto object-contain select-none pointer-events-none"
+              />
+            </div>
+          ))}
+        </div>
+
         <div
           className="flex gap-4 sm:gap-6 relative z-10"
           style={{
@@ -261,9 +343,9 @@ export default function ProgramCarousel({ programs, activeProgramId }: ProgramCa
                     <svg className="h-8 w-8 sm:h-12 sm:w-12 text-emerald-200/90" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
                     </svg>
-                  ) : prog.logo ? (
+                  ) : prog.logo || prog.prog_name ? (
                     <Image
-                      src={`/images/${prog.logo}`}
+                      src={getProgramLogoUrl(prog.logo, prog.prog_name)}
                       alt={prog.prog_name}
                       width={80}
                       height={80}

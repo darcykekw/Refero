@@ -103,9 +103,13 @@ export async function rejectThesis(thesisId: string, reason?: string) {
 
   const { data: thesis } = await adminClient
     .from('theses')
-    .select('title')
+    .select('title, status')
     .eq('id', thesisId)
     .single()
+
+  if (thesis?.status === 'verified') {
+    return { success: false, error: 'Cannot reject a thesis that is already verified.' }
+  }
 
   // Step 1: Try updating status and rejection_reason
   let { error } = await adminClient
@@ -197,19 +201,32 @@ export async function bulkRejectTheses(thesisIds: string[], reason?: string) {
 
   if (thesisIds.length === 0) return { success: true, count: 0 }
 
+  // Exclude theses that are already verified so admin cannot reject them
+  const { data: existingTheses } = await adminClient
+    .from('theses')
+    .select('id, status')
+    .in('id', thesisIds)
+
+  const verifiedIds = new Set((existingTheses || []).filter(t => t.status === 'verified').map(t => t.id))
+  const eligibleIds = thesisIds.filter(id => !verifiedIds.has(id))
+
+  if (eligibleIds.length === 0) {
+    return { success: false, error: 'Cannot reject theses that are already verified.' }
+  }
+
   let { error } = await adminClient
     .from('theses')
     .update({
       status: 'rejected',
       rejection_reason: reason || 'Does not meet submission guidelines',
     } as any)
-    .in('id', thesisIds)
+    .in('id', eligibleIds)
 
   if (isSchemaOrColumnMissing(error)) {
     const retry = await adminClient
       .from('theses')
       .update({ status: 'rejected' } as any)
-      .in('id', thesisIds)
+      .in('id', eligibleIds)
     error = retry.error
   }
 
@@ -221,8 +238,8 @@ export async function bulkRejectTheses(thesisIds: string[], reason?: string) {
     return { success: false, error: error.message }
   }
 
-  await logAudit('BULK_REJECT', 'theses', thesisIds.join(','), {
-    count: thesisIds.length,
+  await logAudit('BULK_REJECT', 'theses', eligibleIds.join(','), {
+    count: eligibleIds.length,
     reason,
   })
 
@@ -231,7 +248,7 @@ export async function bulkRejectTheses(thesisIds: string[], reason?: string) {
   revalidatePath('/admin/theses')
   revalidatePath('/theses')
   revalidatePath('/')
-  return { success: true, count: thesisIds.length }
+  return { success: true, count: eligibleIds.length }
 }
 
 // ── Thesis Masterlist CRUD ────────────────────────────────────────────────────
@@ -283,6 +300,18 @@ export async function updateThesisAdmin(thesisId: string, data: {
 }) {
   await requireAdmin()
   const adminClient = createAdminClient()
+
+  if (data.status === 'rejected') {
+    const { data: currentThesis } = await adminClient
+      .from('theses')
+      .select('status')
+      .eq('id', thesisId)
+      .single()
+
+    if (currentThesis?.status === 'verified') {
+      return { success: false, error: 'Cannot reject a thesis that is already verified.' }
+    }
+  }
 
   let { error } = await adminClient
     .from('theses')

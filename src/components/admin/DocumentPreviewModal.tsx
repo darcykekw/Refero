@@ -55,7 +55,7 @@ export default function DocumentPreviewModal({
   }
 
   function handleReject() {
-    if (!thesis) return
+    if (!thesis || isAlreadyVerified) return
     if (!showRejectInput) {
       setShowRejectInput(true)
       return
@@ -274,8 +274,8 @@ export default function DocumentPreviewModal({
                 </div>
               )}
 
-              {/* Optional Rejection Reason input */}
-              {showRejectInput && (
+              {/* Optional Rejection Reason input (only when not already verified) */}
+              {!isAlreadyVerified && showRejectInput && (
                 <div className="p-4 rounded-xl bg-rose-50/70 border border-rose-200 space-y-2 animate-fade-in">
                   <label className="block text-xs font-bold text-rose-900">
                     Reason for Rejection (Visible to student uploader)
@@ -303,14 +303,16 @@ export default function DocumentPreviewModal({
               </button>
 
               <div className="flex items-center gap-2.5">
-                <button
-                  type="button"
-                  onClick={handleReject}
-                  disabled={isActionPending}
-                  className="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 transition-all shadow-sm cursor-pointer disabled:opacity-50"
-                >
-                  {isActionPending ? 'Processing…' : showRejectInput ? 'Confirm Rejection' : 'Reject Thesis'}
-                </button>
+                {!isAlreadyVerified && (
+                  <button
+                    type="button"
+                    onClick={handleReject}
+                    disabled={isActionPending}
+                    className="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 transition-all shadow-sm cursor-pointer disabled:opacity-50"
+                  >
+                    {isActionPending ? 'Processing…' : showRejectInput ? 'Confirm Rejection' : 'Reject Thesis'}
+                  </button>
+                )}
 
                 {isAlreadyVerified ? (
                   <button

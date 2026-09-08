@@ -8,9 +8,15 @@ interface ThesisCardProps {
   thesis: ThesisWithRelations
   showActions?: boolean
   activeTags?: string[]
+  isBookmarked?: boolean
 }
 
-export default function ThesisCard({ thesis, showActions = false, activeTags = [] }: ThesisCardProps) {
+export default function ThesisCard({
+  thesis,
+  showActions = false,
+  activeTags = [],
+  isBookmarked = false,
+}: ThesisCardProps) {
   const abstract = thesis.abstract.length > 180
     ? thesis.abstract.slice(0, 180).trimEnd() + '…'
     : thesis.abstract
@@ -50,11 +56,12 @@ export default function ThesisCard({ thesis, showActions = false, activeTags = [
           {/* College · Program breadcrumb + Bookmark */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}>
             <p style={{ fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.09em', textTransform: 'uppercase', color: '#2E6A47', lineHeight: 1.2 }}>
-              {thesis.college.college_name} · {thesis.program.prog_name}
+              {thesis.college?.college_name ?? 'College of Sciences'} · {thesis.program?.prog_name ?? 'Sciences'}
             </p>
             <BookmarkButton
               thesisId={thesis.id}
               thesisTitle={thesis.title}
+              initialIsBookmarked={isBookmarked}
               size="sm"
             />
           </div>
