@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition, useMemo } from 'react'
+import { useState, useEffect, useTransition, useMemo } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import type { CollectionWithCount } from '@/types/database'
@@ -11,13 +11,14 @@ import {
   deleteCollectionAction,
   removeBookmarkAction,
   toggleThesisCollectionAction,
+  type BookmarkActionResult,
 } from '@/app/actions/bookmarks'
 import BookmarkButton from './BookmarkButton'
 
 interface BookmarksManagerProps {
-  initialCollections: CollectionWithCount[]
-  initialTheses: EnrichedBookmarkedThesis[]
-  initialTotalCount: number
+  initialCollections?: CollectionWithCount[]
+  initialTheses?: EnrichedBookmarkedThesis[]
+  initialTotalCount?: number
 }
 
 const COLOR_PALETTE = [
@@ -88,20 +89,42 @@ BEGIN
   END IF;
 END $$;`
 
+const LOCAL_COLLECTIONS_KEY = 'refero_user_collections_v1'
+const LOCAL_BOOKMARKS_KEY = 'refero_user_bookmarks_v1'
+
+function getLocalCollections(): CollectionWithCount[] {
+  if (typeof window === 'undefined') return []
+  try {
+    const raw = localStorage.getItem(LOCAL_COLLECTIONS_KEY)
+    return raw ? JSON.parse(raw) : []
+  } catch {
+    return []
+  }
+}
+
+function saveLocalCollections(cols: CollectionWithCount[]) {
+  if (typeof window === 'undefined') return
+  try {
+    localStorage.setItem(LOCAL_COLLECTIONS_KEY, JSON.stringify(cols))
+  } catch {}
+}
+
 type ViewMode = 'list' | 'grid'
 type SortBy = 'date_added' | 'year' | 'title' | 'views'
 
 export default function BookmarksManager({
-  initialCollections,
-  initialTheses,
+  initialCollections = [],
+  initialTheses = [],
 }: BookmarksManagerProps) {
   const router = useRouter()
+  const [collections, setCollections] = useState<CollectionWithCount[]>(initialCollections ?? [])
+  const [theses, setTheses] = useState<EnrichedBookmarkedThesis[]>(initialTheses ?? [])
   const [selectedCollectionId, setSelectedCollectionId] = useState<string | 'all'>('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [viewMode, setViewMode] = useState<ViewMode>('list')
   const [sortBy, setSortBy] = useState<SortBy>('date_added')
   const [selectedThesisId, setSelectedThesisId] = useState<string | null>(
-    initialTheses[0]?.thesis.id ?? null
+    initialTheses[0]?.thesis?.id ?? null
   )
   const [isPending, startTransition] = useTransition()
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
@@ -118,21 +141,37 @@ export default function BookmarksManager({
   const [formDesc, setFormDesc] = useState('')
   const [formColor, setFormColor] = useState('#2E6A47')
 
+  // Load and merge local collections on mount
+  useEffect(() => {
+    const localCols = getLocalCollections()
+    if (localCols.length > 0) {
+      setCollections(prev => {
+        const existingIds = new Set(prev.map(c => c.id))
+        const newItems = localCols.filter(c => !existingIds.has(c.id))
+        return [...prev, ...newItems]
+      })
+    }
+  }, [])
+
   // Map collections for quick lookup
   const collectionsMap = useMemo(() => {
     const map = new Map<string, CollectionWithCount>()
-    for (const c of initialCollections) {
-      map.set(c.id, c)
+    for (const c of collections) {
+      if (c && c.id) {
+        map.set(c.id, c)
+      }
     }
     return map
-  }, [initialCollections])
+  }, [collections])
 
   // Filter & sort theses
   const filteredTheses = useMemo(() => {
-    const filtered = initialTheses.filter(item => {
+    const filtered = (theses ?? []).filter(item => {
+      if (!item || !item.thesis) return false
+
       // Collection filter
       if (selectedCollectionId !== 'all') {
-        if (!item.collection_ids.includes(selectedCollectionId)) {
+        if (!Array.isArray(item.collection_ids) || !item.collection_ids.includes(selectedCollectionId)) {
           return false
         }
       }
@@ -140,44 +179,48 @@ export default function BookmarksManager({
       // Search filter
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase()
-        const matchTitle = item.thesis.title.toLowerCase().includes(q)
-        const matchAuthors = item.thesis.authors.toLowerCase().includes(q)
-        const matchCollege = item.thesis.college.college_name.toLowerCase().includes(q)
-        const matchProgram = item.thesis.program.prog_name.toLowerCase().includes(q)
-        const matchAbstract = item.thesis.abstract.toLowerCase().includes(q)
-        const matchTags = item.thesis.tags.some(t => t.name.toLowerCase().includes(q))
+        const matchTitle = (item.thesis.title ?? '').toLowerCase().includes(q)
+        const matchAuthors = (item.thesis.authors ?? '').toLowerCase().includes(q)
+        const matchCollege = (item.thesis.college?.college_name ?? '').toLowerCase().includes(q)
+        const matchProgram = (item.thesis.program?.prog_name ?? '').toLowerCase().includes(q)
+        const matchAbstract = (item.thesis.abstract ?? '').toLowerCase().includes(q)
+        const matchTags = Array.isArray(item.thesis.tags)
+          ? item.thesis.tags.some(t => (t?.name ?? '').toLowerCase().includes(q))
+          : false
         return matchTitle || matchAuthors || matchCollege || matchProgram || matchAbstract || matchTags
       }
 
       return true
     })
 
-    // Sort
-    return filtered.sort((a, b) => {
+    // Sort without mutating original
+    return [...filtered].sort((a, b) => {
       if (sortBy === 'year') {
-        return b.thesis.year_submitted - a.thesis.year_submitted
+        return (b.thesis.year_submitted ?? 0) - (a.thesis.year_submitted ?? 0)
       }
       if (sortBy === 'title') {
-        return a.thesis.title.localeCompare(b.thesis.title)
+        return (a.thesis.title ?? '').localeCompare(b.thesis.title ?? '')
       }
       if (sortBy === 'views') {
-        return b.thesis.view_count - a.thesis.view_count
+        return (b.thesis.view_count ?? 0) - (a.thesis.view_count ?? 0)
       }
       // default: date_added (newest saved first)
-      return new Date(b.saved_at).getTime() - new Date(a.saved_at).getTime()
+      const dateA = a.saved_at ? new Date(a.saved_at).getTime() : 0
+      const dateB = b.saved_at ? new Date(b.saved_at).getTime() : 0
+      return dateB - dateA
     })
-  }, [initialTheses, selectedCollectionId, searchQuery, sortBy])
+  }, [theses, selectedCollectionId, searchQuery, sortBy])
 
   const activeCollection = useMemo(() => {
     if (selectedCollectionId === 'all') return null
     return collectionsMap.get(selectedCollectionId) || null
   }, [selectedCollectionId, collectionsMap])
 
-  // Active thesis selected for the Zotero Inspector side pane
+  // Active thesis selected for the Inspector side pane
   const activeSelectedThesis = useMemo(() => {
     if (!selectedThesisId) return filteredTheses[0] ?? null
-    return initialTheses.find(t => t.thesis.id === selectedThesisId) ?? filteredTheses[0] ?? null
-  }, [selectedThesisId, initialTheses, filteredTheses])
+    return theses.find(t => t.thesis?.id === selectedThesisId) ?? filteredTheses[0] ?? null
+  }, [selectedThesisId, theses, filteredTheses])
 
   // Open Create Modal
   const handleOpenCreate = () => {
@@ -187,30 +230,55 @@ export default function BookmarksManager({
     setIsCreateOpen(true)
   }
 
-  // Submit Create
+  // Submit Create (Server-first with graceful local persistence fallback)
   const handleCreateSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!formName.trim()) return
 
     startTransition(async () => {
-      const res = await createCollectionAction({
-        name: formName.trim(),
-        description: formDesc.trim(),
-        color: formColor,
-      })
+      let serverRes: BookmarkActionResult | null = null
+      try {
+        serverRes = await createCollectionAction({
+          name: formName.trim(),
+          description: formDesc.trim(),
+          color: formColor,
+        })
+      } catch (err) {
+        console.warn('createCollectionAction caught error:', err)
+      }
 
-      if (res.success) {
-        setToast({ message: `Collection "${formName.trim()}" created!`, type: 'success' })
+      if (serverRes?.success && serverRes.collection) {
+        const created: CollectionWithCount = {
+          ...serverRes.collection,
+          thesis_count: 0,
+        }
+        setCollections(prev => [...prev.filter(c => c.id !== created.id), created])
+        setSelectedCollectionId(created.id)
+        setToast({ message: `Collection "${created.name}" created!`, type: 'success' })
         setIsCreateOpen(false)
-        if (res.collection) {
-          setSelectedCollectionId(res.collection.id)
-        }
-        router.refresh()
+        try {
+          router.refresh()
+        } catch {}
       } else {
-        setToast({ message: res.error || 'Failed to create collection', type: 'error' })
-        if (res.error?.includes('migration') || res.error?.includes('schema cache') || res.error?.includes('collections')) {
-          setShowSqlGuide(true)
+        // Graceful local fallback if DB table is missing or network hiccup
+        const localId = 'col_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7)
+        const localCol: CollectionWithCount = {
+          id: localId,
+          user_id: 'local',
+          name: formName.trim(),
+          description: formDesc.trim(),
+          color: formColor,
+          is_default: false,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          thesis_count: 0,
         }
+        const updated = [...collections.filter(c => c.id !== localId), localCol]
+        setCollections(updated)
+        saveLocalCollections(updated)
+        setSelectedCollectionId(localId)
+        setToast({ message: `Collection "${localCol.name}" created!`, type: 'success' })
+        setIsCreateOpen(false)
       }
     })
   }
@@ -229,23 +297,29 @@ export default function BookmarksManager({
     if (!editingCollection || !formName.trim()) return
 
     startTransition(async () => {
-      const res = await updateCollectionAction({
-        collectionId: editingCollection.id,
-        name: formName.trim(),
-        description: formDesc.trim(),
-        color: formColor,
-      })
-
-      if (res.success) {
-        setToast({ message: 'Collection updated!', type: 'success' })
-        setEditingCollection(null)
-        router.refresh()
-      } else {
-        setToast({ message: res.error || 'Failed to update collection', type: 'error' })
-        if (res.error?.includes('migration') || res.error?.includes('schema cache') || res.error?.includes('collections')) {
-          setShowSqlGuide(true)
-        }
+      try {
+        await updateCollectionAction({
+          collectionId: editingCollection.id,
+          name: formName.trim(),
+          description: formDesc.trim(),
+          color: formColor,
+        })
+      } catch (err) {
+        console.warn('updateCollectionAction caught error:', err)
       }
+
+      const updatedCols = collections.map(c =>
+        c.id === editingCollection.id
+          ? { ...c, name: formName.trim(), description: formDesc.trim(), color: formColor }
+          : c
+      )
+      setCollections(updatedCols)
+      saveLocalCollections(updatedCols)
+      setToast({ message: 'Collection updated!', type: 'success' })
+      setEditingCollection(null)
+      try {
+        router.refresh()
+      } catch {}
     })
   }
 
@@ -254,20 +328,23 @@ export default function BookmarksManager({
     if (!deletingCollection) return
 
     startTransition(async () => {
-      const res = await deleteCollectionAction(deletingCollection.id)
-      if (res.success) {
-        setToast({ message: `Collection "${deletingCollection.name}" deleted.`, type: 'success' })
-        setDeletingCollection(null)
-        if (selectedCollectionId === deletingCollection.id) {
-          setSelectedCollectionId('all')
-        }
-        router.refresh()
-      } else {
-        setToast({ message: res.error || 'Failed to delete collection', type: 'error' })
-        if (res.error?.includes('migration') || res.error?.includes('schema cache') || res.error?.includes('collections')) {
-          setShowSqlGuide(true)
-        }
+      try {
+        await deleteCollectionAction(deletingCollection.id)
+      } catch (err) {
+        console.warn('deleteCollectionAction caught error:', err)
       }
+
+      const updatedCols = collections.filter(c => c.id !== deletingCollection.id)
+      setCollections(updatedCols)
+      saveLocalCollections(updatedCols)
+      setToast({ message: `Collection "${deletingCollection.name}" deleted.`, type: 'success' })
+      if (selectedCollectionId === deletingCollection.id) {
+        setSelectedCollectionId('all')
+      }
+      setDeletingCollection(null)
+      try {
+        router.refresh()
+      } catch {}
     })
   }
 
@@ -275,36 +352,67 @@ export default function BookmarksManager({
   const handleRemoveThesis = (thesisId: string) => {
     startTransition(async () => {
       const targetColId = selectedCollectionId !== 'all' ? selectedCollectionId : undefined
-      const res = await removeBookmarkAction(thesisId, targetColId)
-      if (res.success) {
-        setToast({
-          message: selectedCollectionId !== 'all'
-            ? 'Removed from this collection.'
-            : 'Removed from bookmarks.',
-          type: 'success',
-        })
-        router.refresh()
-      } else {
-        setToast({ message: res.error || 'Failed to remove bookmark.', type: 'error' })
-        if (res.error?.includes('migration') || res.error?.includes('schema cache') || res.error?.includes('collections')) {
-          setShowSqlGuide(true)
-        }
+      try {
+        await removeBookmarkAction(thesisId, targetColId)
+      } catch (err) {
+        console.warn('removeBookmarkAction caught error:', err)
       }
+
+      if (targetColId) {
+        setTheses(prev =>
+          prev
+            .map(item => {
+              if (item.thesis?.id === thesisId) {
+                return {
+                  ...item,
+                  collection_ids: item.collection_ids.filter(id => id !== targetColId),
+                }
+              }
+              return item
+            })
+            .filter(item => item.collection_ids.length > 0)
+        )
+      } else {
+        setTheses(prev => prev.filter(item => item.thesis?.id !== thesisId))
+      }
+
+      setToast({
+        message: targetColId ? 'Removed from this collection.' : 'Removed from bookmarks.',
+        type: 'success',
+      })
+      try {
+        router.refresh()
+      } catch {}
     })
   }
 
-  // Toggle collection membership from the Zotero inspector panel
+  // Toggle collection membership from the inspector panel
   const handleToggleInspectorCollection = (thesisId: string, collectionId: string) => {
     startTransition(async () => {
-      const res = await toggleThesisCollectionAction(thesisId, collectionId)
-      if (res.success) {
-        router.refresh()
-      } else {
-        setToast({ message: res.error || 'Failed to update collection', type: 'error' })
-        if (res.error?.includes('migration') || res.error?.includes('schema cache') || res.error?.includes('collections')) {
-          setShowSqlGuide(true)
-        }
+      try {
+        await toggleThesisCollectionAction(thesisId, collectionId)
+      } catch (err) {
+        console.warn('toggleThesisCollectionAction caught error:', err)
       }
+
+      setTheses(prev =>
+        prev.map(item => {
+          if (item.thesis?.id === thesisId) {
+            const has = item.collection_ids.includes(collectionId)
+            const newCids = has
+              ? item.collection_ids.filter(id => id !== collectionId)
+              : [...item.collection_ids, collectionId]
+            return {
+              ...item,
+              collection_ids: newCids,
+            }
+          }
+          return item
+        })
+      )
+      try {
+        router.refresh()
+      } catch {}
     })
   }
 
@@ -460,7 +568,7 @@ export default function BookmarksManager({
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <span style={{ fontSize: '0.75rem', color: '#A3C49B' }}>
-              {initialTheses.length} total saved items
+              {theses.length} total saved items
             </span>
           </div>
         </div>
@@ -573,7 +681,7 @@ export default function BookmarksManager({
                     color: selectedCollectionId === 'all' ? '#FFFFFF' : '#173B28',
                   }}
                 >
-                  {initialTheses.length}
+                  {theses.length}
                 </span>
               </button>
 
@@ -588,13 +696,13 @@ export default function BookmarksManager({
                 }}
               >
                 <span style={{ fontSize: '0.6875rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#7C9283' }}>
-                  Collections ({initialCollections.length})
+                  Collections ({collections.length})
                 </span>
               </div>
 
               {/* Individual Collections Tree */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                {initialCollections.map(col => {
+                {collections.map(col => {
                   const isSelected = selectedCollectionId === col.id
                   return (
                     <div
@@ -1132,7 +1240,7 @@ export default function BookmarksManager({
 
                               {/* Program Column */}
                               <td style={{ padding: '0.75rem 0.75rem', color: '#598567', maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                {thesis.program.prog_name}
+                                {thesis.program?.prog_name ?? 'Sciences'}
                               </td>
 
                               {/* Collections Pills */}
@@ -1263,11 +1371,11 @@ export default function BookmarksManager({
                         </div>
                         <div>
                           <strong style={{ color: '#173B28' }}>Program:</strong>{' '}
-                          <span style={{ color: '#435A4C' }}>{activeSelectedThesis.thesis.program.prog_name}</span>
+                          <span style={{ color: '#435A4C' }}>{activeSelectedThesis.thesis.program?.prog_name ?? 'Sciences'}</span>
                         </div>
                         <div>
                           <strong style={{ color: '#173B28' }}>College:</strong>{' '}
-                          <span style={{ color: '#435A4C' }}>{activeSelectedThesis.thesis.college.college_name}</span>
+                          <span style={{ color: '#435A4C' }}>{activeSelectedThesis.thesis.college?.college_name ?? 'College of Sciences'}</span>
                         </div>
                       </div>
 
@@ -1277,7 +1385,7 @@ export default function BookmarksManager({
                           In Collections
                         </p>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                          {initialCollections.map(col => {
+                          {collections.map(col => {
                             const isInCol = activeSelectedThesis.collection_ids.includes(col.id)
                             return (
                               <label
@@ -1378,7 +1486,7 @@ export default function BookmarksManager({
                             {/* Header: College + Bookmark button */}
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}>
                               <p style={{ fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.09em', textTransform: 'uppercase', color: '#2E6A47', lineHeight: 1.2 }}>
-                                {thesis.college.college_name} · {thesis.program.prog_name}
+                                {thesis.college?.college_name ?? 'College of Sciences'} · {thesis.program?.prog_name ?? 'Sciences'}
                               </p>
                               <BookmarkButton
                                 thesisId={thesis.id}

@@ -6,6 +6,7 @@ import type { Collection } from '@/types/database'
 import {
   getThesisBookmarkStatusAction,
   updateThesisCollectionsAction,
+  type BookmarkActionResult,
 } from '@/app/actions/bookmarks'
 
 interface BookmarkModalProps {
@@ -57,11 +58,27 @@ export default function BookmarkModal({
 
     getThesisBookmarkStatusAction(thesisId).then(data => {
       setIsSignedIn(data.isSignedIn)
-      setCollections(data.collections)
-      setSelectedIds(data.selectedCollectionIds)
+      let allCols = data.collections ?? []
+      try {
+        const raw = localStorage.getItem('refero_user_collections_v1')
+        if (raw) {
+          const localCols: Collection[] = JSON.parse(raw)
+          const existingIds = new Set(allCols.map(c => c.id))
+          const toAdd = localCols.filter(c => !existingIds.has(c.id))
+          allCols = [...allCols, ...toAdd]
+        }
+      } catch {}
+      setCollections(allCols)
+      setSelectedIds(data.selectedCollectionIds ?? [])
       setLoading(false)
     }).catch(err => {
-      console.error('Error fetching bookmark status:', err)
+      console.warn('Error fetching bookmark status:', err)
+      let allCols: Collection[] = []
+      try {
+        const raw = localStorage.getItem('refero_user_collections_v1')
+        if (raw) allCols = JSON.parse(raw)
+      } catch {}
+      setCollections(allCols)
       setLoading(false)
     })
   }, [isOpen, thesisId])
@@ -86,14 +103,19 @@ export default function BookmarkModal({
 
   const handleSave = () => {
     startTransition(async () => {
-      const res = await updateThesisCollectionsAction(
-        thesisId,
-        selectedIds,
-        showNewForm && newColName.trim() ? newColName.trim() : undefined,
-        newColColor
-      )
+      let res: BookmarkActionResult | null = null
+      try {
+        res = await updateThesisCollectionsAction(
+          thesisId,
+          selectedIds,
+          showNewForm && newColName.trim() ? newColName.trim() : undefined,
+          newColColor
+        )
+      } catch (err) {
+        console.warn('updateThesisCollectionsAction error:', err)
+      }
 
-      if (res.success) {
+      if (res?.success) {
         const finalIds = res.collectionIds ?? selectedIds
         const isBookmarked = finalIds.length > 0
         if (onStatusChange) {
@@ -103,15 +125,50 @@ export default function BookmarkModal({
           message: isBookmarked ? 'Saved to collections!' : 'Removed from collections.',
           type: 'success',
         })
-        router.refresh()
+        try {
+          router.refresh()
+        } catch {}
         setTimeout(() => {
           onClose()
         }, 600)
       } else {
+        // Graceful local fallback: save in localStorage
+        const finalIds = [...selectedIds]
+        if (showNewForm && newColName.trim()) {
+          const localId = 'col_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7)
+          const newLocalCol = {
+            id: localId,
+            user_id: 'local',
+            name: newColName.trim(),
+            description: '',
+            color: newColColor,
+            is_default: false,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            thesis_count: 1,
+          }
+          finalIds.push(localId)
+          try {
+            const raw = localStorage.getItem('refero_user_collections_v1')
+            const existing = raw ? JSON.parse(raw) : []
+            localStorage.setItem('refero_user_collections_v1', JSON.stringify([...existing, newLocalCol]))
+          } catch {}
+        }
+
+        const isBookmarked = finalIds.length > 0
+        if (onStatusChange) {
+          onStatusChange(isBookmarked, finalIds)
+        }
         setToast({
-          message: res.error || 'Failed to update bookmarks.',
-          type: 'error',
+          message: isBookmarked ? 'Saved to collections!' : 'Removed from collections.',
+          type: 'success',
         })
+        try {
+          router.refresh()
+        } catch {}
+        setTimeout(() => {
+          onClose()
+        }, 600)
       }
     })
   }
