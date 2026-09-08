@@ -40,7 +40,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
 
       {/* ── Hero ──────────────────────────────────────────────────────────── */}
       <header
-        className="w-full"
+        className="w-full animate-scale-in"
         style={{
           position: 'relative',
           overflow: 'hidden',
@@ -137,7 +137,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       </header>
 
       {/* ── Browse by Program ──────────────────────────────────────────────── */}
-      <section className="w-full">
+      <section className="w-full animate-fade-in-up delay-150">
         <div className="section-header">
           <h2 className="section-title">Browse by Program</h2>
         </div>
@@ -147,7 +147,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       </section>
 
       {/* ── Featured Theses ────────────────────────────────────────────────── */}
-      <section className="w-full">
+      <section className="w-full animate-fade-in-up delay-300">
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.75rem' }}>
           <div className="section-header" style={{ marginBottom: 0 }}>
             <h2 className="section-title">
