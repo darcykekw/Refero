@@ -178,7 +178,7 @@ export default function ProgramCarousel({ programs, activeProgramId }: ProgramCa
 
   return (
     <div
-      className="relative"
+      className="relative w-full"
       role="group"
       aria-label="Browse by program"
       onKeyDown={onKeyDown}
@@ -190,7 +190,7 @@ export default function ProgramCarousel({ programs, activeProgramId }: ProgramCa
       {/* Forest academic track */}
       <div
         ref={cardRef}
-        className="overflow-hidden rounded-3xl relative"
+        className="overflow-hidden rounded-3xl relative w-full"
         style={{
           background: 'linear-gradient(135deg, #0D2418 0%, #173B28 50%, #1F4C33 100%)',
           border: '1px solid rgba(143,168,133,0.25)',

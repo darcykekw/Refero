@@ -29,7 +29,7 @@ export default async function RootLayout({
         {!isAdminRoute && <Navbar />}
         {/* Offset for fixed navbar only on non-admin routes */}
         <main
-          className="flex-1 flex flex-col"
+          className="flex-1 flex flex-col w-full items-stretch"
           style={{ paddingTop: isAdminRoute ? '0px' : '66px' }}
         >
           {children}

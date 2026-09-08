@@ -36,10 +36,11 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   ]
 
   return (
-    <div className="max-w-7xl page-gutter py-10 space-y-16">
+    <div className="w-full max-w-7xl page-gutter py-10 space-y-16">
 
       {/* ── Hero ──────────────────────────────────────────────────────────── */}
       <header
+        className="w-full"
         style={{
           position: 'relative',
           overflow: 'hidden',
@@ -124,9 +125,9 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           </div>
 
           {/* Stat cards */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 150px))', gap: '1rem' }}>
+          <div className="grid grid-cols-3 gap-3 sm:gap-4 max-w-lg">
             {STATS.map(s => (
-              <div key={s.label} style={{ padding: '1rem 1.25rem', borderRadius: 12, background: 'rgba(255,255,255,0.05)', backdropFilter: 'blur(10px)', border: '1px solid rgba(143,168,133,0.15)', transition: 'background 0.2s' }}>
+              <div key={s.label} style={{ padding: '0.875rem 1.25rem', borderRadius: 12, background: 'rgba(255,255,255,0.05)', backdropFilter: 'blur(10px)', border: '1px solid rgba(143,168,133,0.15)', transition: 'background 0.2s' }}>
                 <p style={{ fontSize: '0.6875rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#8FA885', marginBottom: 4 }}>{s.label}</p>
                 <p style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: '2rem', fontWeight: 800, color: '#fff', lineHeight: 1 }}>{s.value.toLocaleString()}</p>
               </div>
@@ -136,7 +137,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       </header>
 
       {/* ── Browse by Program ──────────────────────────────────────────────── */}
-      <section>
+      <section className="w-full">
         <div className="section-header">
           <h2 className="section-title">Browse by Program</h2>
         </div>
@@ -146,7 +147,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       </section>
 
       {/* ── Featured Theses ────────────────────────────────────────────────── */}
-      <section>
+      <section className="w-full">
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.75rem' }}>
           <div className="section-header" style={{ marginBottom: 0 }}>
             <h2 className="section-title">

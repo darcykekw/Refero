@@ -69,7 +69,7 @@ export default async function ThesesPage({ searchParams }: ThesesPageProps) {
   }
 
   return (
-    <div className="max-w-7xl page-gutter py-10 space-y-8">
+    <div className="w-full max-w-7xl page-gutter py-10 space-y-8">
 
       {/* Breadcrumb */}
       <nav className="breadcrumb-bar" aria-label="Breadcrumb">
