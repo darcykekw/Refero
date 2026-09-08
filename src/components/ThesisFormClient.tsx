@@ -1,6 +1,6 @@
 'use client'
 
-import { useActionState, useState } from 'react'
+import { useActionState, useState, useEffect } from 'react'
 import type { College, Program, Tag, ThesisWithRelations } from '@/types/database'
 import type { ThesisActionState } from '@/app/actions/thesis'
 import { DEFAULT_COLLEGES, DEFAULT_PROGRAMS, DEFAULT_TAGS } from '@/lib/constants/programs'
@@ -47,6 +47,25 @@ export default function ThesisFormClient({
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>(() => {
     return initialData?.tags?.map(t => t.id) ?? []
   })
+
+  useEffect(() => {
+    if (state.success && state.localThesis) {
+      try {
+        const raw = localStorage.getItem('refero_user_theses_v1')
+        const existing: ThesisWithRelations[] = raw ? JSON.parse(raw) : []
+        const updated = [state.localThesis, ...existing.filter(t => t.id !== state.localThesis!.id)]
+        localStorage.setItem('refero_user_theses_v1', JSON.stringify(updated))
+
+        window.dispatchEvent(new CustomEvent('refero-thesis-uploaded', {
+          detail: { thesis: state.localThesis }
+        }))
+      } catch (err) {
+        console.warn('Failed to save thesis locally:', err)
+      }
+
+      window.location.href = '/theses?uploaded=true'
+    }
+  }, [state.success, state.localThesis])
 
   return (
     <form action={formAction} className="space-y-6">

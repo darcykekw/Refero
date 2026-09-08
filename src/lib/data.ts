@@ -108,16 +108,27 @@ export const getSiteStats = cache(async (): Promise<SiteStats> => {
  * `[{ tag: {...} }]` rather than `[{...}]` — so `flattenTags` unwraps them.
  */
 interface ThesisJoinRow extends Thesis {
-  college: College
-  program: Program
-  tags: { tag: Tag | null }[]
+  college?: College | null
+  program?: Program | null
+  tags?: { tag: Tag | null }[] | null
 }
 
-function flattenTags(rows: ThesisJoinRow[]): ThesisWithRelations[] {
-  return rows.map(row => ({
-    ...row,
-    tags: row.tags.map(t => t.tag).filter((tag): tag is Tag => tag != null),
-  }))
+function flattenTags(rows: (Partial<ThesisJoinRow> & Thesis)[]): ThesisWithRelations[] {
+  return rows.map(row => {
+    const defaultCollege = DEFAULT_COLLEGES.find(c => c.id === row.college_id) ?? DEFAULT_COLLEGES[0]
+    const defaultProgram = DEFAULT_PROGRAMS.find(p => p.id === row.program_id) ?? DEFAULT_PROGRAMS[0]
+
+    return {
+      ...row,
+      college: row.college ?? defaultCollege,
+      program: row.program ?? defaultProgram,
+      tags: Array.isArray(row.tags)
+        ? row.tags
+            .map(t => (t && typeof t === 'object' && 'tag' in t ? (t as any).tag : t))
+            .filter((tag): tag is Tag => tag != null && typeof tag === 'object' && 'name' in tag)
+        : [],
+    } as ThesisWithRelations
+  })
 }
 
 // ── Featured theses (home page) ───────────────────────────────────────────────
@@ -228,74 +239,11 @@ export async function getThesesList(opts: {
   tagIds?: string[]
   page?: number
 }): Promise<ThesisListResult> {
-  const supabase = await createClient()
   const page = Math.max(1, opts.page ?? 1)
   const from = (page - 1) * PAGE_SIZE
   const to   = from + PAGE_SIZE - 1
 
-  // Collect thesis IDs that match all selected tags (if any)
-  let tagFilterIds: string[] | null = null
-  if (opts.tagIds && opts.tagIds.length > 0) {
-    const validTagIds = opts.tagIds.filter(isValidUUID)
-    if (validTagIds.length === 0) {
-      return { theses: [], totalCount: 0, page, totalPages: 0 }
-    }
-    tagFilterIds = await getThesisIdsWithAllTags(supabase, validTagIds)
-    // If no theses match all tags, short-circuit
-    if (tagFilterIds.length === 0) {
-      return { theses: [], totalCount: 0, page, totalPages: 0 }
-    }
-  }
-
-  let q = supabase
-    .from('theses')
-    .select(`*, college:colleges(*), program:programs(*), tags:thesis_tags(tag:tags(*))`, { count: 'exact' })
-    .or('status.eq.verified,status.is.null')
-    .order('date_added', { ascending: false })
-    .range(from, to)
-
-  if (opts.query) {
-    // Values are quoted so a comma or dot in the search box cannot terminate
-    // this filter branch and append conditions of the visitor's choosing.
-    const pattern = pgFilterValue(`%${opts.query}%`)
-    const branches = [
-      `title.ilike.${pattern}`,
-      `authors.ilike.${pattern}`,
-      `abstract.ilike.${pattern}`,
-    ]
-
-    // Legacy parity: the Django search also matched tag names.
-    const taggedIds = await getThesisIdsMatchingTagName(supabase, opts.query)
-    if (taggedIds.length > 0) {
-      // UUIDs come from the database, so they need no quoting.
-      branches.push(`id.in.(${taggedIds.join(',')})`)
-    }
-
-    q = q.or(branches.join(','))
-  }
-
-  if (tagFilterIds !== null) {
-    q = q.in('id', tagFilterIds)
-  }
-
-  let { data, error, count } = await runWithRetry(() => q)
-  if (error && (error as any).code === '42703') {
-    // Fallback if status column is not yet present
-    let fallbackQ = supabase
-      .from('theses')
-      .select(`*, college:colleges(*), program:programs(*), tags:thesis_tags(tag:tags(*))`, { count: 'exact' })
-      .order('date_added', { ascending: false })
-      .range(from, to)
-    if (tagFilterIds !== null) {
-      fallbackQ = fallbackQ.in('id', tagFilterIds)
-    }
-    const fallbackRes = await runWithRetry(() => fallbackQ)
-    data = fallbackRes.data
-    error = fallbackRes.error
-    count = fallbackRes.count
-  }
-
-  if (error || (!data || data.length === 0)) {
+  function getFilteredDefaults(): ThesisListResult {
     let list = DEFAULT_THESES
     if (opts.query) {
       const q = opts.query.toLowerCase()
@@ -309,17 +257,85 @@ export async function getThesesList(opts: {
       theses: list.slice(from, to + 1),
       totalCount,
       page,
-      totalPages: Math.ceil(totalCount / PAGE_SIZE),
+      totalPages: Math.max(1, Math.ceil(totalCount / PAGE_SIZE)),
     }
   }
 
-  const theses = flattenTags(data ?? [])
-  const totalCount = count ?? 0
-  return {
-    theses,
-    totalCount,
-    page,
-    totalPages: Math.ceil(totalCount / PAGE_SIZE),
+  try {
+    const supabase = await createClient()
+
+    // Collect thesis IDs that match all selected tags (if any)
+    let tagFilterIds: string[] | null = null
+    if (opts.tagIds && opts.tagIds.length > 0) {
+      const validTagIds = opts.tagIds.filter(isValidUUID)
+      if (validTagIds.length === 0) {
+        return { theses: [], totalCount: 0, page, totalPages: 0 }
+      }
+      tagFilterIds = await getThesisIdsWithAllTags(supabase, validTagIds)
+      // If no theses match all tags, short-circuit
+      if (tagFilterIds.length === 0) {
+        return { theses: [], totalCount: 0, page, totalPages: 0 }
+      }
+    }
+
+    let q = supabase
+      .from('theses')
+      .select(`*, college:colleges(*), program:programs(*), tags:thesis_tags(tag:tags(*))`, { count: 'exact' })
+      .or('status.eq.verified,status.is.null')
+      .order('date_added', { ascending: false })
+      .range(from, to)
+
+    if (opts.query) {
+      const pattern = pgFilterValue(`%${opts.query}%`)
+      const branches = [
+        `title.ilike.${pattern}`,
+        `authors.ilike.${pattern}`,
+        `abstract.ilike.${pattern}`,
+      ]
+
+      const taggedIds = await getThesisIdsMatchingTagName(supabase, opts.query)
+      if (taggedIds.length > 0) {
+        branches.push(`id.in.(${taggedIds.join(',')})`)
+      }
+
+      q = q.or(branches.join(','))
+    }
+
+    if (tagFilterIds !== null) {
+      q = q.in('id', tagFilterIds)
+    }
+
+    let { data, error, count } = await runWithRetry(() => q)
+    if (error && (error as any).code === '42703') {
+      let fallbackQ = supabase
+        .from('theses')
+        .select(`*, college:colleges(*), program:programs(*), tags:thesis_tags(tag:tags(*))`, { count: 'exact' })
+        .order('date_added', { ascending: false })
+        .range(from, to)
+      if (tagFilterIds !== null) {
+        fallbackQ = fallbackQ.in('id', tagFilterIds)
+      }
+      const fallbackRes = await runWithRetry(() => fallbackQ)
+      data = fallbackRes.data
+      error = fallbackRes.error
+      count = fallbackRes.count
+    }
+
+    if (error || (!data || data.length === 0)) {
+      return getFilteredDefaults()
+    }
+
+    const theses = flattenTags(data ?? [])
+    const totalCount = count ?? 0
+    return {
+      theses,
+      totalCount,
+      page,
+      totalPages: Math.ceil(totalCount / PAGE_SIZE),
+    }
+  } catch (err) {
+    console.warn('getThesesList query error, using defaults:', err)
+    return getFilteredDefaults()
   }
 }
 
@@ -427,21 +443,25 @@ export const getAvailableTags = cache(async (limit = 40): Promise<Tag[]> => {
 
 export const getUserTheses = cache(async (userId: string): Promise<ThesisWithRelations[]> => {
   if (!isValidUUID(userId)) return []
-  const supabase = await createClient()
-  const { data, error } = await runWithRetry(() =>
-    supabase
-      .from('theses')
-      .select(`*, college:colleges(*), program:programs(*), tags:thesis_tags(tag:tags(*))`)
-      .eq('uploaded_by', userId)
-      .order('date_added', { ascending: false })
-  )
+  try {
+    const supabase = await createClient()
+    const { data, error } = await runWithRetry(() =>
+      supabase
+        .from('theses')
+        .select(`*, college:colleges(*), program:programs(*), tags:thesis_tags(tag:tags(*))`)
+        .eq('uploaded_by', userId)
+        .order('date_added', { ascending: false })
+    )
 
-  if (error) {
-    console.error('getUserTheses error:', error.message || error)
+    if (error || !data) {
+      return []
+    }
+
+    return flattenTags(data)
+  } catch (err) {
+    console.warn('getUserTheses error:', err)
     return []
   }
-
-  return flattenTags(data ?? [])
 })
 
 // ── Single thesis ─────────────────────────────────────────────────────────────

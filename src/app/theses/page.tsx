@@ -6,6 +6,11 @@ import { getThesesList, getAvailableTags, getUserTheses } from '@/lib/data'
 import { getUserBookmarkMap } from '@/lib/bookmarks'
 import ThesisCard from '@/components/ThesisCard'
 import ThesisSearch from '@/components/ThesisSearch'
+import ThesesGridClient from '@/components/ThesesGridClient'
+import { DEFAULT_THESES, DEFAULT_TAGS } from '@/lib/constants/programs'
+import type { Tag, ThesisWithRelations } from '@/types/database'
+
+export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
   title: 'Theses',
@@ -29,20 +34,30 @@ export default async function ThesesPage({ searchParams }: ThesesPageProps) {
     : []
   const page = Math.max(1, parseInt(params.page ?? '1', 10))
 
-  const user = await getCurrentUser()
-  const [listResult, availableTags, bookmarkMap] = await Promise.all([
-    getThesesList({ query, tagIds, page }),
-    getAvailableTags(40),
-    user ? getUserBookmarkMap(user.id) : Promise.resolve({} as Record<string, string[]>),
-  ])
+  const user = await getCurrentUser().catch(() => null)
+  let listResult = { theses: DEFAULT_THESES, totalCount: DEFAULT_THESES.length, totalPages: 1, page: 1 }
+  let availableTags: Tag[] = DEFAULT_TAGS
+  let bookmarkMap: Record<string, string[]> = {}
+  let userUploads: ThesisWithRelations[] = []
 
-  // "Your uploads" only appears on the unfiltered list, and only for a signed-in
-  // visitor, so it is fetched after the user is known.
-  const userUploads = user && !query && tagIds.length === 0
-    ? await getUserTheses(user.id)
-    : []
+  try {
+    const [lRes, tagsRes, bMapRes] = await Promise.all([
+      getThesesList({ query, tagIds, page }).catch(() => ({ theses: DEFAULT_THESES, totalCount: DEFAULT_THESES.length, totalPages: 1, page })),
+      getAvailableTags(40).catch(() => DEFAULT_TAGS.slice(0, 40)),
+      user ? getUserBookmarkMap(user.id).catch(() => ({})) : Promise.resolve({} as Record<string, string[]>),
+    ])
+    listResult = lRes
+    availableTags = tagsRes ?? DEFAULT_TAGS
+    bookmarkMap = bMapRes ?? {}
 
-  const { theses, totalCount, totalPages } = listResult
+    if (user && !query && tagIds.length === 0) {
+      userUploads = await getUserTheses(user.id).catch(() => [])
+    }
+  } catch (err) {
+    console.warn('ThesesPage data load error:', err)
+  }
+
+  const { theses = [], totalCount = 0, totalPages = 1 } = listResult
 
   // Build URL helper — preserves existing params, updates/removes one key
   function buildUrl(updates: Record<string, string | null>) {
@@ -128,62 +143,16 @@ export default async function ThesesPage({ searchParams }: ThesesPageProps) {
         </div>
       )}
 
-      {/* ── My Uploads (only when not searching) ─────────────────────── */}
-      {user && Array.isArray(userUploads) && userUploads.length > 0 && (
-        <section>
-          <div className="section-bar mb-4">
-            <div className="flex items-center gap-2.5">
-              <div className="h-5 w-1 rounded-full bg-emerald-700" />
-              <h2 className="text-xl font-bold" style={{ fontFamily: "'Playfair Display', Georgia, serif", color: '#112117' }}>My Theses</h2>
-            </div>
-            <Link href="/theses/upload" className="btn btn-primary btn-sm">
-              + Upload
-            </Link>
-          </div>
-          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {userUploads.map(thesis => (
-              <ThesisCard
-                key={thesis.id}
-                thesis={thesis}
-                showActions
-                isBookmarked={Boolean(bookmarkMap[thesis.id]?.length)}
-              />
-            ))}
-          </div>
-          <div className="mt-8 pt-6 border-t border-slate-200">
-            <div className="section-header mb-4">
-              <h2 className="section-title text-xl">All Theses</h2>
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* ── Theses grid ──────────────────────────────────────────────── */}
-      {theses.length > 0 ? (
-        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {theses.map(thesis => (
-            <ThesisCard
-              key={thesis.id}
-              thesis={thesis}
-              activeTags={availableTags.filter(t => tagIds.includes(t.id)).map(t => t.name)}
-              isBookmarked={Boolean(bookmarkMap[thesis.id]?.length)}
-            />
-          ))}
-        </div>
-      ) : (
-        <div className="card p-14 text-center">
-          <div className="text-4xl mb-3">🔍</div>
-          <p className="font-semibold text-slate-700">No theses found</p>
-          <p className="text-sm text-slate-400 mt-1">
-            {query ? `No results for "${query}". Try different keywords.` : 'No theses match the current filters.'}
-          </p>
-          {(query || tagIds.length > 0) && (
-            <Link href="/theses" className="btn btn-ghost btn-sm mt-4 inline-flex">
-              Clear all filters
-            </Link>
-          )}
-        </div>
-      )}
+      {/* ── Theses Catalog & Uploads Grid ─────────────────────────── */}
+      <ThesesGridClient
+        initialTheses={theses}
+        initialUserUploads={userUploads}
+        availableTags={availableTags}
+        tagIds={tagIds}
+        bookmarkMap={bookmarkMap}
+        query={query}
+        userSignedIn={Boolean(user)}
+      />
 
       {/* ── Pagination ───────────────────────────────────────────────── */}
       {totalPages > 1 && (

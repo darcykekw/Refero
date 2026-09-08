@@ -8,6 +8,9 @@ import { getThesisPdfUrl } from '@/lib/storage'
 import { getThesisRecommendations, type SSPaper } from '@/lib/semantic-scholar'
 import { getUserBookmarkMap } from '@/lib/bookmarks'
 import BookmarkButton from '@/components/bookmarks/BookmarkButton'
+import ThesisDetailLocalFallback from '@/components/ThesisDetailLocalFallback'
+
+export const dynamic = 'force-dynamic'
 
 interface PageProps {
   params: Promise<{ id: string }>
@@ -17,28 +20,30 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const { id } = await params
   // getThesisById is request-cached, so this shares one query with the page below.
   const thesis = await getThesisById(id)
-  if (!thesis) return { title: 'Thesis Not Found' }
+  if (!thesis) return { title: 'Thesis Manuscript' }
   return {
     title: thesis.title,
-    description: thesis.abstract.length > 155
-      ? thesis.abstract.slice(0, 155).trimEnd() + '…'
-      : thesis.abstract,
+    description: (thesis.abstract || '').length > 155
+      ? (thesis.abstract || '').slice(0, 155).trimEnd() + '…'
+      : (thesis.abstract || ''),
   }
 }
 
 export default async function ThesisDetailPage({ params }: PageProps) {
   const { id } = await params
   const thesis = await getThesisById(id)
-  if (!thesis) notFound()
+  if (!thesis) {
+    return <ThesisDetailLocalFallback id={id} />
+  }
 
   // Current user (for edit/delete buttons), the atomic view bump, and a
   // time-limited PDF link — all independent, so run them together.
   const [user, viewCount, pdfUrl] = await Promise.all([
-    getCurrentUser(),
-    incrementThesisViews(id),
-    getThesisPdfUrl(thesis.pdf_file),
+    getCurrentUser().catch(() => null),
+    incrementThesisViews(id).catch(() => null),
+    getThesisPdfUrl(thesis.pdf_file).catch(() => null),
   ])
-  const bookmarkMap = user ? await getUserBookmarkMap(user.id) : {}
+  const bookmarkMap: Record<string, string[]> = user ? await getUserBookmarkMap(user.id).catch(() => ({})) : {}
   const isOwner = user?.id === thesis.uploaded_by
 
   return (
@@ -57,7 +62,7 @@ export default async function ThesisDetailPage({ params }: PageProps) {
       <div className="card p-5 sm:p-8 space-y-4">
         <div>
           <p className="text-xs font-semibold text-sky-600 uppercase tracking-wide mb-2">
-            {thesis.college.college_name} · {thesis.program.prog_name}
+            {thesis.college?.college_name ?? 'College of Sciences'} · {thesis.program?.prog_name ?? 'Sciences'}
           </p>
           <h1 className="text-xl sm:text-3xl font-bold text-slate-900 leading-snug">{thesis.title}</h1>
         </div>
@@ -82,7 +87,7 @@ export default async function ThesisDetailPage({ params }: PageProps) {
         </div>
 
         {/* Tags */}
-        {thesis.tags.length > 0 && (
+        {(thesis.tags || []).length > 0 && (
           <div className="flex flex-wrap gap-1.5">
             {thesis.tags.map(tag => (
               <Link key={tag.id} href={`/theses?tag=${tag.id}`} className="tag-chip">
