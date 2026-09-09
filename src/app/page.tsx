@@ -32,9 +32,9 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     ?? 'Researcher'
 
   const STATS = [
-    { label: 'Theses', value: Math.max(stats.thesis_count, featured.length, 5), icon: '📄' },
-    { label: 'Programs', value: Math.max(stats.program_count, programs.length, 5), icon: '🎓' },
-    { label: 'Tags', value: Math.max(stats.tag_count, 8), icon: '🏷️' },
+    { label: 'Theses', value: Math.max(stats.thesis_count, featured.length), icon: '📄' },
+    { label: 'Programs', value: Math.max(stats.program_count, programs.length), icon: '🎓' },
+    { label: 'Tags', value: stats.tag_count, icon: '🏷️' },
   ]
 
   return (

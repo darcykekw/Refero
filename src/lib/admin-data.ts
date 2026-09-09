@@ -61,10 +61,6 @@ export async function getAdminStats(): Promise<AdminStats> {
     theses = allTheses ?? []
   }
 
-  if (theses.length === 0) {
-    theses = DEFAULT_THESES.map(t => ({ id: t.id, program_id: t.program_id, status: 'verified' }))
-  }
-
   const totalTheses = theses.length
   // If status is not explicitly set, default to verified or pending
   const pendingTheses = theses.filter(t => t.status === 'pending').length
@@ -196,27 +192,7 @@ export async function getMasterlistTheses(options?: {
   }
 
   if (error || (!data || data.length === 0)) {
-    let list: AdminThesisItem[] = DEFAULT_THESES.map(t => ({
-      ...t,
-      uploaderEmail: 'student@psu.palawan.edu.ph',
-      uploaderName: t.authors.split(',')[0].trim(),
-    }))
-
-    if (options?.programId) {
-      list = list.filter(t => t.program_id === options.programId)
-    }
-    if (options?.status && options.status !== 'all') {
-      list = list.filter(t => (t.status || 'verified') === options.status)
-    }
-    if (options?.query) {
-      const q = options.query.toLowerCase()
-      list = list.filter(t =>
-        t.title.toLowerCase().includes(q) ||
-        t.authors.toLowerCase().includes(q) ||
-        t.abstract.toLowerCase().includes(q)
-      )
-    }
-    return list
+    return []
   }
 
   return formatThesisRows(data ?? [])

@@ -8,6 +8,7 @@
  */
 import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import type { College, Program, Tag, Thesis, ThesisWithRelations } from '@/types/database'
 
 // ── UUID validation helper ───────────────────────────────────────────────────
@@ -61,7 +62,7 @@ export interface SiteStats {
 }
 
 export const getSiteStats = cache(async (): Promise<SiteStats> => {
-  let thesisCount = DEFAULT_THESES.length
+  let thesisCount = 0
   let collegeCount = DEFAULT_COLLEGES.length
   let programCount = DEFAULT_PROGRAMS.length
   let tagCount = DEFAULT_TAGS.length
@@ -69,7 +70,7 @@ export const getSiteStats = cache(async (): Promise<SiteStats> => {
   try {
     const supabase = await createClient()
     const [theses, colleges, programs, tags] = await Promise.all([
-      supabase.from('theses').select('id', { count: 'exact', head: true }),
+      supabase.from('theses').select('id', { count: 'exact', head: true }).or('status.eq.verified,status.is.null'),
       supabase.from('colleges').select('id', { count: 'exact', head: true }),
       supabase.from('programs').select('id', { count: 'exact', head: true }),
       supabase.from('tags').select('id', { count: 'exact', head: true }),
@@ -77,7 +78,16 @@ export const getSiteStats = cache(async (): Promise<SiteStats> => {
 
     if (theses.count != null && theses.count > 0) {
       thesisCount = theses.count
+    } else {
+      try {
+        const admin = createAdminClient()
+        const adminTheses = await admin.from('theses').select('id', { count: 'exact', head: true }).or('status.eq.verified,status.is.null')
+        if (adminTheses.count != null) {
+          thesisCount = adminTheses.count
+        }
+      } catch {}
     }
+
     if (colleges.count != null && colleges.count > 0) {
       collegeCount = colleges.count
     }
@@ -88,7 +98,7 @@ export const getSiteStats = cache(async (): Promise<SiteStats> => {
       tagCount = tags.count
     }
   } catch (err) {
-    console.warn('getSiteStats query fallback to defaults:', err)
+    console.warn('getSiteStats query error:', err)
   }
 
   return {
@@ -170,14 +180,31 @@ export const getFeaturedTheses = cache(async (programId?: string): Promise<Thesi
     if (!error && data && data.length > 0) {
       return flattenTags(data)
     }
+
+    // Try admin client to bypass RLS for public verified theses read
+    try {
+      const admin = createAdminClient()
+      let adminQ = admin
+        .from('theses')
+        .select(`*, college:colleges(*), program:programs(*), tags:thesis_tags(tag:tags(*))`)
+        .or('status.eq.verified,status.is.null')
+        .order('date_added', { ascending: false })
+        .limit(6)
+
+      if (programId && isValidUUID(programId)) {
+        adminQ = adminQ.eq('program_id', programId)
+      }
+
+      const adminRes = await runWithRetry(() => adminQ)
+      if (!adminRes.error && adminRes.data && adminRes.data.length > 0) {
+        return flattenTags(adminRes.data)
+      }
+    } catch {}
   } catch (err) {
-    console.warn('getFeaturedTheses query error, using defaults:', err)
+    console.warn('getFeaturedTheses query error:', err)
   }
 
-  if (programId) {
-    return DEFAULT_THESES.filter(t => t.program_id === programId)
-  }
-  return DEFAULT_THESES
+  return []
 })
 
 // ── Colleges & programs (for filters and form pickers) ───────────────────────
@@ -322,7 +349,52 @@ export async function getThesesList(opts: {
     }
 
     if (error || (!data || data.length === 0)) {
-      return getFilteredDefaults()
+      try {
+        const admin = createAdminClient()
+        let adminQ = admin
+          .from('theses')
+          .select(`*, college:colleges(*), program:programs(*), tags:thesis_tags(tag:tags(*))`, { count: 'exact' })
+          .or('status.eq.verified,status.is.null')
+          .order('date_added', { ascending: false })
+          .range(from, to)
+
+        if (opts.query) {
+          const pattern = pgFilterValue(`%${opts.query}%`)
+          const branches = [
+            `title.ilike.${pattern}`,
+            `authors.ilike.${pattern}`,
+            `abstract.ilike.${pattern}`,
+          ]
+          const taggedIds = await getThesisIdsMatchingTagName(admin, opts.query)
+          if (taggedIds.length > 0) {
+            branches.push(`id.in.(${taggedIds.join(',')})`)
+          }
+          adminQ = adminQ.or(branches.join(','))
+        }
+
+        if (tagFilterIds !== null) {
+          adminQ = adminQ.in('id', tagFilterIds)
+        }
+
+        const adminRes = await runWithRetry(() => adminQ)
+        if (!adminRes.error && adminRes.data && adminRes.data.length > 0) {
+          const theses = flattenTags(adminRes.data)
+          const totalCount = adminRes.count ?? theses.length
+          return {
+            theses,
+            totalCount,
+            page,
+            totalPages: Math.ceil(totalCount / PAGE_SIZE),
+          }
+        }
+      } catch {}
+
+      return {
+        theses: [],
+        totalCount: 0,
+        page,
+        totalPages: 0,
+      }
     }
 
     const theses = flattenTags(data ?? [])
@@ -334,8 +406,13 @@ export async function getThesesList(opts: {
       totalPages: Math.ceil(totalCount / PAGE_SIZE),
     }
   } catch (err) {
-    console.warn('getThesesList query error, using defaults:', err)
-    return getFilteredDefaults()
+    console.warn('getThesesList query error:', err)
+    return {
+      theses: [],
+      totalCount: 0,
+      page,
+      totalPages: 0,
+    }
   }
 }
 
@@ -479,10 +556,18 @@ export const getThesisById = cache(async (id: string): Promise<ThesisWithRelatio
     )
 
     if (!error && data) return flattenTags([data])[0] ?? null
-  } catch {}
 
-  const defaultMatch = DEFAULT_THESES.find(t => t.id === id)
-  if (defaultMatch) return defaultMatch
+    // Try admin client for anonymous visitors reading public thesis
+    try {
+      const admin = createAdminClient()
+      const { data: adminData } = await admin
+        .from('theses')
+        .select(`*, college:colleges(*), program:programs(*), tags:thesis_tags(tag:tags(*))`)
+        .eq('id', id)
+        .maybeSingle()
+      if (adminData) return flattenTags([adminData])[0] ?? null
+    } catch {}
+  } catch {}
 
   return null
 })

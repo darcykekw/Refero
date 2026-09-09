@@ -35,14 +35,14 @@ export default async function ThesesPage({ searchParams }: ThesesPageProps) {
   const page = Math.max(1, parseInt(params.page ?? '1', 10))
 
   const user = await getCurrentUser().catch(() => null)
-  let listResult = { theses: DEFAULT_THESES, totalCount: DEFAULT_THESES.length, totalPages: 1, page: 1 }
+  let listResult = { theses: [] as ThesisWithRelations[], totalCount: 0, totalPages: 1, page: 1 }
   let availableTags: Tag[] = DEFAULT_TAGS
   let bookmarkMap: Record<string, string[]> = {}
   let userUploads: ThesisWithRelations[] = []
 
   try {
     const [lRes, tagsRes, bMapRes] = await Promise.all([
-      getThesesList({ query, tagIds, page }).catch(() => ({ theses: DEFAULT_THESES, totalCount: DEFAULT_THESES.length, totalPages: 1, page })),
+      getThesesList({ query, tagIds, page }).catch(() => ({ theses: [] as ThesisWithRelations[], totalCount: 0, totalPages: 1, page })),
       getAvailableTags(40).catch(() => DEFAULT_TAGS.slice(0, 40)),
       user ? getUserBookmarkMap(user.id).catch(() => ({})) : Promise.resolve({} as Record<string, string[]>),
     ])
