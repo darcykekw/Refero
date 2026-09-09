@@ -21,7 +21,9 @@ export default function ThesisCard({
     ? thesis.abstract.slice(0, 180).trimEnd() + '…'
     : thesis.abstract
 
-  const isVerified = thesis.status === 'verified' || !thesis.status
+  const isRejected = thesis.status === 'rejected'
+  const isPending = thesis.status === 'pending'
+  const isVerified = thesis.status === 'verified' || (!thesis.status && !isRejected && !isPending)
 
   return (
     <div style={{ position: 'relative', display: 'flex', flexDirection: 'column' }}>
@@ -44,18 +46,84 @@ export default function ThesisCard({
         />
       )}
 
+      {/* Rejected Status Badge on top-right */}
+      {isRejected && (
+        <span
+          style={{
+            position: 'absolute',
+            top: -10,
+            right: -10,
+            zIndex: 10,
+            padding: '0.25rem 0.65rem',
+            background: '#FEF2F2',
+            color: '#B91C1C',
+            border: '1.5px solid #F87171',
+            borderRadius: 999,
+            fontSize: '0.6875rem',
+            fontWeight: 800,
+            letterSpacing: '0.04em',
+            textTransform: 'uppercase',
+            boxShadow: '0 2px 8px rgba(185, 28, 28, 0.25)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 4,
+          }}
+        >
+          <span>✕</span>
+          <span>Rejected</span>
+        </span>
+      )}
+
+      {/* Pending Status Badge on top-right */}
+      {isPending && (
+        <span
+          style={{
+            position: 'absolute',
+            top: -10,
+            right: -10,
+            zIndex: 10,
+            padding: '0.25rem 0.65rem',
+            background: '#FFFBEB',
+            color: '#B45309',
+            border: '1.5px solid #FCD34D',
+            borderRadius: 999,
+            fontSize: '0.6875rem',
+            fontWeight: 800,
+            letterSpacing: '0.04em',
+            textTransform: 'uppercase',
+            boxShadow: '0 2px 8px rgba(180, 83, 9, 0.2)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 4,
+          }}
+        >
+          <span>⏳</span>
+          <span>Under Review</span>
+        </span>
+      )}
+
       <article
         className="card card-hover"
         style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative', height: '100%' }}
       >
-        {/* Sage top accent border */}
-        <div style={{ height: 3, background: 'linear-gradient(90deg, #2E6A47, #8FA885)', flexShrink: 0 }} />
+        {/* Top accent border */}
+        <div
+          style={{
+            height: 3,
+            background: isRejected
+              ? 'linear-gradient(90deg, #DC2626, #F87171)'
+              : isPending
+                ? 'linear-gradient(90deg, #D97706, #FBBF24)'
+                : 'linear-gradient(90deg, #2E6A47, #8FA885)',
+            flexShrink: 0,
+          }}
+        />
 
         <div style={{ padding: '1.25rem 1.375rem', display: 'flex', flexDirection: 'column', gap: '0.875rem', flex: 1 }}>
 
           {/* College · Program breadcrumb + Bookmark */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}>
-            <p style={{ fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.09em', textTransform: 'uppercase', color: '#2E6A47', lineHeight: 1.2 }}>
+            <p style={{ fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.09em', textTransform: 'uppercase', color: isRejected ? '#B91C1C' : '#2E6A47', lineHeight: 1.2 }}>
               {thesis.college?.college_name ?? 'College of Sciences'} · {thesis.program?.prog_name ?? 'Sciences'}
             </p>
             <BookmarkButton
@@ -80,6 +148,28 @@ export default function ThesisCard({
               {thesis.authors} · {thesis.year_submitted}
             </p>
           </div>
+
+          {/* Rejection Notice Banner */}
+          {isRejected && (
+            <div
+              style={{
+                padding: '0.625rem 0.8125rem',
+                borderRadius: '8px',
+                backgroundColor: '#FEF2F2',
+                border: '1px solid #FECACA',
+                fontSize: '0.75rem',
+                lineHeight: 1.45,
+              }}
+            >
+              <div style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 5, color: '#991B1B', marginBottom: 2 }}>
+                <span style={{ fontSize: '0.8125rem' }}>✕</span>
+                <span>Research Submission Rejected</span>
+              </div>
+              <p style={{ margin: 0, color: '#7F1D1D' }}>
+                <strong style={{ color: '#991B1B' }}>Reason:</strong> {thesis.rejection_reason || 'Does not meet submission guidelines.'}
+              </p>
+            </div>
+          )}
 
           {/* Abstract */}
           <p style={{ fontSize: '0.875rem', color: '#435A4C', lineHeight: 1.7, flex: 1 }}>

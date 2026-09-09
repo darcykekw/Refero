@@ -31,6 +31,8 @@ export default async function ProfilePage() {
   ])
 
   const bookmarkedSet = new Set((bookmarkData?.items ?? []).map(b => b.thesis?.id).filter(Boolean))
+  const rejectedCount = theses.filter(t => t.status === 'rejected').length
+  const pendingCount = theses.filter(t => t.status === 'pending').length
 
   return (
     <div className="w-full max-w-5xl page-gutter py-6 sm:py-10 space-y-6 sm:space-y-8">
@@ -88,7 +90,19 @@ export default async function ProfilePage() {
           <div>
             <h2 className="text-xl font-bold" style={{ fontFamily: "'Playfair Display', Georgia, serif", color: '#112117' }}>My Theses</h2>
             {theses.length > 0 && (
-              <p className="text-xs text-slate-500 mt-0.5">{theses.length} uploaded</p>
+              <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                <span className="text-xs text-slate-500">{theses.length} total</span>
+                {rejectedCount > 0 && (
+                  <span className="text-[11px] font-bold text-red-700 bg-red-50 border border-red-200 px-2 py-0.5 rounded-full flex items-center gap-1">
+                    <span>✕</span> {rejectedCount} rejected
+                  </span>
+                )}
+                {pendingCount > 0 && (
+                  <span className="text-[11px] font-bold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full flex items-center gap-1">
+                    <span>⏳</span> {pendingCount} under review
+                  </span>
+                )}
+              </div>
             )}
           </div>
         </div>
@@ -101,6 +115,19 @@ export default async function ProfilePage() {
           </Link>
         </div>
       </div>
+
+      {/* Rejection Notification Banner if any exist */}
+      {rejectedCount > 0 && (
+        <div className="rounded-xl border border-red-200 bg-red-50/90 p-4 text-xs sm:text-sm text-red-800 flex items-start gap-2.5">
+          <span className="text-base font-bold text-red-600 shrink-0 mt-0.5">✕</span>
+          <div>
+            <span className="font-bold text-red-900">
+              {rejectedCount === 1 ? '1 of your research submissions was rejected by an administrator.' : `${rejectedCount} of your research submissions were rejected by an administrator.`}
+            </span>{' '}
+            Please review the reason stated on the rejected card below, and edit your thesis to address the feedback.
+          </div>
+        </div>
+      )}
 
       {/* Thesis grid */}
       {theses.length === 0 ? (

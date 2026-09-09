@@ -56,6 +56,10 @@ export default function ThesisDetailLocalFallback({ id }: ThesisDetailLocalFallb
     ? (thesis.pdf_file.startsWith('http') ? thesis.pdf_file : `${supabaseUrl}/storage/v1/object/public/thesis-pdfs/${thesis.pdf_file}`)
     : null
 
+  const isRejected = thesis.status === 'rejected'
+  const isPending = thesis.status === 'pending'
+  const isVerified = thesis.status === 'verified' || (!thesis.status && !isRejected && !isPending)
+
   return (
     <div className="w-full max-w-5xl page-gutter py-6 sm:py-10 space-y-6 sm:space-y-8">
       {/* Breadcrumb */}
@@ -67,12 +71,91 @@ export default function ThesisDetailLocalFallback({ id }: ThesisDetailLocalFallb
         <span className="current truncate max-w-[200px] sm:max-w-md">{thesis.title}</span>
       </nav>
 
+      {/* Rejection Alert Banner */}
+      {isRejected && (
+        <div className="rounded-2xl border-2 border-red-200 bg-red-50/95 p-5 sm:p-6 shadow-sm">
+          <div className="flex items-start gap-3.5">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-100 text-red-600 font-bold text-xl">
+              ✕
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-base sm:text-lg font-bold text-red-900">
+                  Research Submission Rejected
+                </h2>
+                <span className="rounded-full bg-red-600 px-2.5 py-0.5 text-xs font-bold uppercase tracking-wider text-white">
+                  Rejected by Admin
+                </span>
+              </div>
+              <p className="mt-1 text-xs sm:text-sm text-red-700">
+                This research submission was reviewed by the administrator and has been rejected. It is not visible in the public repository catalog.
+              </p>
+              
+              <div className="mt-3 rounded-xl border border-red-200 bg-white/90 p-3.5 sm:p-4 text-sm shadow-inner">
+                <span className="text-xs font-bold uppercase tracking-wider text-red-800 block mb-1">
+                  Reason for Rejection:
+                </span>
+                <p className="text-red-950 font-medium whitespace-pre-wrap leading-relaxed">
+                  {thesis.rejection_reason || 'Does not meet institutional submission guidelines or formatting requirements.'}
+                </p>
+              </div>
+
+              <div className="mt-3.5 flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-red-200/60">
+                <p className="text-xs text-red-800">
+                  You can revise your manuscript details or re-upload your PDF and resubmit.
+                </p>
+                <Link
+                  href={`/theses/${thesis.id}/edit`}
+                  className="btn btn-sm bg-red-600 hover:bg-red-700 text-white font-medium text-xs px-3.5 py-1.5 rounded-lg border-0 inline-flex items-center gap-1.5 shrink-0"
+                >
+                  Edit &amp; Resubmit Thesis →
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Under Review Notice Banner */}
+      {isPending && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50/90 p-4 sm:p-5 shadow-sm flex items-start gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700 font-bold text-base">
+            ⏳
+          </div>
+          <div className="flex-1">
+            <h2 className="text-sm sm:text-base font-bold text-amber-900">
+              Research Submission Under Review
+            </h2>
+            <p className="mt-0.5 text-xs sm:text-sm text-amber-800">
+              This manuscript is currently pending administrator verification before being made visible to the general public catalog.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="card p-5 sm:p-8 space-y-4">
         <div>
-          <p className="text-xs font-semibold text-sky-600 uppercase tracking-wide mb-2">
-            {thesis.college?.college_name ?? 'College of Sciences'} · {thesis.program?.prog_name ?? 'Sciences'}
-          </p>
+          <div className="flex items-center justify-between gap-3 flex-wrap mb-2">
+            <p className="text-xs font-semibold text-emerald-800 uppercase tracking-wide">
+              {thesis.college?.college_name ?? 'College of Sciences'} · {thesis.program?.prog_name ?? 'Sciences'}
+            </p>
+            {isRejected && (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-700 border border-red-300 shadow-sm">
+                ✕ Rejected
+              </span>
+            )}
+            {isPending && (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-300 shadow-sm">
+                ⏳ Under Review
+              </span>
+            )}
+            {isVerified && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-sm">
+                ✓ Verified
+              </span>
+            )}
+          </div>
           <h1 className="text-xl sm:text-3xl font-bold text-slate-900 leading-snug">{thesis.title}</h1>
         </div>
 
