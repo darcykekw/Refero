@@ -49,8 +49,9 @@ export default async function AdminUsersPage() {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {users.map(u => {
+                const adminEmails = ['202380256@psu.palawan.edu.ph', 'lawsmagnet6@gmail.com']
                 const isAdmin =
-                  u.email === '202380256@psu.palawan.edu.ph' ||
+                  (u.email && adminEmails.includes(u.email.toLowerCase())) ||
                   u.app_metadata?.role === 'admin' ||
                   u.user_metadata?.role === 'admin'
                 const fullName = u.user_metadata?.full_name || u.user_metadata?.name || 'Student'

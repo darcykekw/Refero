@@ -80,8 +80,9 @@ export async function updateSession(request: NextRequest) {
   }
 
   // Admin routes: require admin access
+  const adminEmails = ['202380256@psu.palawan.edu.ph', 'lawsmagnet6@gmail.com']
   const isAdmin =
-    (user?.email && user.email.toLowerCase() === '202380256@psu.palawan.edu.ph') ||
+    (user?.email && adminEmails.includes(user.email.toLowerCase())) ||
     user?.app_metadata?.role === 'admin' ||
     user?.user_metadata?.role === 'admin'
 

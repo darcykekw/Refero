@@ -31,7 +31,10 @@ export const getCurrentUser = cache(async (): Promise<User | null> => {
   }
 })
 
-export const ADMIN_EMAILS = ['202380256@psu.palawan.edu.ph']
+export const ADMIN_EMAILS = [
+  '202380256@psu.palawan.edu.ph',
+  'lawsmagnet6@gmail.com',
+]
 
 export function isAdminUser(user: User | null): boolean {
   if (!user) return false

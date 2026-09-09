@@ -39,7 +39,7 @@ export default async function AdminLayout({
       {/* Main Content Area */}
       <div className="flex-1 md:ml-72 flex flex-col min-w-0 space-y-5">
         <AdminTopNav
-          userEmail={user.email ?? '202380256@psu.palawan.edu.ph'}
+          userEmail={user.email ?? 'admin@psu.palawan.edu.ph'}
           userName={user.user_metadata?.full_name || 'Admin'}
           pendingCount={stats.pendingTheses}
         />
