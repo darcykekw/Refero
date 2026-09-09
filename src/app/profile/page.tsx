@@ -69,12 +69,6 @@ export default async function ProfilePage() {
               </p>
               <p className="text-xs text-slate-400 mt-0.5">Bookmarks</p>
             </Link>
-            {stats.avgScore != null && (
-              <div>
-                <p className="text-xl sm:text-2xl font-bold text-sky-600">{stats.avgScore.toFixed(1)}</p>
-                <p className="text-xs text-slate-400 mt-0.5">Avg. score</p>
-              </div>
-            )}
           </div>
         </div>
 
