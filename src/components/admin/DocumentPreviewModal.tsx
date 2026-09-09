@@ -236,7 +236,7 @@ export default function DocumentPreviewModal({
                   <div className="col-span-2 pt-2 border-t border-slate-200/60 flex items-center justify-between">
                     <span className="text-xs font-medium text-slate-600">Panel Evaluation Score</span>
                     <span className="text-xs font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full">
-                      ★ {thesis.panel_score.toFixed(1)} / 5.0
+                      ★ {thesis.panel_score.toFixed(1)}
                     </span>
                   </div>
                 )}
