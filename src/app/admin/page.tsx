@@ -186,15 +186,18 @@ export default async function AdminDashboardPage() {
                 return (
                   <div
                     key={p.programId}
-                    className="flex flex-col items-center text-center p-4 rounded-[22px] transition-all duration-200 hover:-translate-y-1 hover:shadow-md hover:border-emerald-500/50 group"
+                    className="flex flex-col items-center text-center p-4 rounded-[22px] transition-all duration-200 hover:-translate-y-1 hover:shadow-lg hover:border-emerald-400/60 group relative overflow-hidden"
                     style={{
-                      background: 'linear-gradient(180deg, #FBFDFB 0%, #EFF6F1 100%)',
-                      border: '1px solid rgba(143, 168, 133, 0.32)',
-                      boxShadow: '0 4px 14px -2px rgba(23, 59, 40, 0.04)',
+                      background: 'linear-gradient(145deg, #173B28 0%, #1E4D35 50%, #29593D 100%)',
+                      border: '1px solid rgba(143, 168, 133, 0.4)',
+                      boxShadow: '0 8px 22px -4px rgba(23, 59, 40, 0.28), 0 2px 6px rgba(0,0,0,0.06)',
                     }}
                   >
+                    {/* Subtle ambient light glow */}
+                    <div className="absolute -top-6 -right-6 w-20 h-20 rounded-full bg-emerald-400/10 pointer-events-none" />
+
                     {/* 1. Logo of each program */}
-                    <div className="w-14 h-14 rounded-2xl bg-white p-2 shadow-xs border border-emerald-100/90 flex items-center justify-center mb-3 group-hover:scale-105 group-hover:border-emerald-300 transition-all duration-200">
+                    <div className="w-14 h-14 rounded-2xl bg-white p-2 shadow-sm border border-emerald-300/30 flex items-center justify-center mb-3 group-hover:scale-105 group-hover:border-emerald-300 transition-all duration-200 shrink-0">
                       {p.logo ? (
                         <Image
                           src={p.logo}
@@ -209,35 +212,35 @@ export default async function AdminDashboardPage() {
                     </div>
 
                     {/* 2. Under of it is name of program */}
-                    <h3 className="font-serif font-bold text-slate-800 text-xs sm:text-[13px] leading-snug min-h-[2.5rem] flex items-center justify-center group-hover:text-emerald-800 transition-colors px-0.5">
+                    <h3 className="font-serif font-bold text-white text-xs sm:text-[13px] leading-snug min-h-[2.5rem] flex items-center justify-center px-0.5 tracking-tight group-hover:text-emerald-200 transition-colors">
                       {p.programName.replace('Bachelor of Science in ', 'BS ').replace('Bachelor of Science in', 'BS')}
                     </h3>
 
                     {/* 3. Under of it: How many total in the program each submitted and verified */}
-                    <div className="mt-3 w-full pt-2.5 border-t border-emerald-900/10 space-y-1.5 text-xs">
-                      <div className="flex items-center justify-between text-[11px] font-medium text-slate-500">
+                    <div className="mt-3 w-full pt-3 border-t border-white/15 space-y-2 text-xs">
+                      <div className="flex items-center justify-between text-[11px] font-semibold text-emerald-100">
                         <span>Total:</span>
-                        <span className="font-mono font-extrabold text-emerald-900 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200/60">
+                        <span className="font-mono font-extrabold text-white bg-white/20 px-2 py-0.5 rounded-md border border-white/25 shadow-xs">
                           {p.count}
                         </span>
                       </div>
 
                       <div className="flex items-center justify-between text-[11px]">
-                        <span className="text-slate-500 flex items-center gap-1.5 font-medium">
-                          <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+                        <span className="text-emerald-200/90 flex items-center gap-1.5 font-medium">
+                          <span className="w-1.5 h-1.5 rounded-full bg-slate-300" />
                           Submitted:
                         </span>
-                        <span className="font-mono font-bold text-slate-700">
+                        <span className="font-mono font-bold text-white">
                           {p.submittedCount}
                         </span>
                       </div>
 
                       <div className="flex items-center justify-between text-[11px]">
-                        <span className="text-emerald-800 font-bold flex items-center gap-1.5">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />
+                        <span className="text-emerald-100 font-bold flex items-center gap-1.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-xs" />
                           Verified:
                         </span>
-                        <span className="font-mono font-extrabold text-emerald-800 bg-emerald-50/70 border border-emerald-200/60 px-1.5 py-0.2 rounded">
+                        <span className="font-mono font-black text-emerald-950 bg-emerald-300 border border-emerald-200 px-2 py-0.5 rounded-md shadow-xs">
                           {p.verifiedCount}
                         </span>
                       </div>
