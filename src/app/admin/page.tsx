@@ -212,7 +212,10 @@ export default async function AdminDashboardPage() {
                     </div>
 
                     {/* 2. Under of it is name of program */}
-                    <h3 className="font-serif font-bold text-white text-xs sm:text-[13px] leading-snug min-h-[2.5rem] flex items-center justify-center px-0.5 tracking-tight group-hover:text-emerald-200 transition-colors">
+                    <h3
+                      className="font-serif font-bold !text-white text-xs sm:text-[13px] leading-snug min-h-[2.5rem] flex items-center justify-center px-0.5 tracking-tight group-hover:!text-emerald-200 transition-colors"
+                      style={{ color: '#FFFFFF' }}
+                    >
                       {p.programName.replace('Bachelor of Science in ', 'BS ').replace('Bachelor of Science in', 'BS')}
                     </h3>
 

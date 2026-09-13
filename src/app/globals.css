@@ -87,18 +87,20 @@ body {
 }
 
 /* ─── Typography ────────────────────────────────────────────── */
-h1, h2, h3 {
-  font-family: 'Playfair Display', 'Georgia', serif;
-  color: var(--color-text);
-  line-height: 1.2;
-  letter-spacing: -0.01em;
-}
+@layer base {
+  h1, h2, h3 {
+    font-family: 'Playfair Display', 'Georgia', serif;
+    color: var(--color-text);
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+  }
 
-h4, h5, h6 {
-  font-family: 'Inter', system-ui, sans-serif;
-  color: var(--color-text);
-  line-height: 1.35;
-  font-weight: 600;
+  h4, h5, h6 {
+    font-family: 'Inter', system-ui, sans-serif;
+    color: var(--color-text);
+    line-height: 1.35;
+    font-weight: 600;
+  }
 }
 
 /* ─── Layout ────────────────────────────────────────────────── */
