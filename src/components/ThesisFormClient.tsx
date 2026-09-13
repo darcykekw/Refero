@@ -321,7 +321,7 @@ export default function ThesisFormClient({
           </label>
           <input type="hidden" name="college_id" value={selectedCollegeId} />
           <div
-            className="input flex items-center justify-between font-semibold"
+            className="input flex items-center font-semibold"
             style={{
               backgroundColor: '#F3F6F3',
               color: '#173B28',
@@ -330,9 +330,6 @@ export default function ThesisFormClient({
             }}
           >
             <span>{scienceCollege?.college_name || 'College of Sciences'}</span>
-            <span className="text-xs text-emerald-700 font-bold bg-white px-2 py-0.5 rounded border border-emerald-300">
-              Fixed
-            </span>
           </div>
         </div>
         <div>
