@@ -27,7 +27,7 @@ export default async function AdminLayout({
       className="min-h-screen flex text-slate-800 antialiased p-3 sm:p-4 md:p-5"
       style={{
         backgroundColor: '#F3F6F3',
-        backgroundImage: "url('/referoback.png')",
+        backgroundImage: "url('/referoback1.png')",
         backgroundAttachment: 'fixed',
         backgroundSize: 'cover',
         backgroundPosition: 'center',

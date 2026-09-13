@@ -213,6 +213,11 @@ export default function ThesisMasterlistTable({
                         <p className="text-[11px] text-slate-500 truncate mt-0.5">
                           {thesis.authors} {thesis.adviser ? `· Adviser: ${thesis.adviser}` : ''}
                         </p>
+                        {(thesis.uploaderName || thesis.uploaderEmail) && (
+                          <p className="text-[10px] text-emerald-800 font-medium truncate mt-0.5">
+                            <span className="font-bold text-slate-500">Uploaded by:</span> {thesis.uploaderName} {thesis.uploaderEmail ? `(${thesis.uploaderEmail})` : ''}
+                          </p>
+                        )}
                       </td>
                       <td className="py-3.5 px-4 whitespace-nowrap">
                         <span className="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-800 font-semibold text-[11px] border border-emerald-100">

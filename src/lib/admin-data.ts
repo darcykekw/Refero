@@ -140,7 +140,7 @@ export async function getVerificationQueue(limit = 50): Promise<AdminThesisItem[
 
   // Only return theses that are explicitly pending verification
   const pending = (data ?? []).filter(t => (t as any).status === 'pending')
-  return formatThesisRows(pending)
+  return formatThesisRowsWithUsers(adminClient, pending)
 }
 
 /**
@@ -195,7 +195,7 @@ export async function getMasterlistTheses(options?: {
     return []
   }
 
-  return formatThesisRows(data ?? [])
+  return formatThesisRowsWithUsers(adminClient, data ?? [])
 }
 
 /**
@@ -268,6 +268,31 @@ export async function getAuditLogsList(limit = 50): Promise<AuditLog[]> {
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
+
+async function formatThesisRowsWithUsers(adminClient: any, rows: any[]): Promise<AdminThesisItem[]> {
+  const userMap = new Map<string, { email?: string; name?: string }>()
+  try {
+    const { data } = await adminClient.auth.admin.listUsers({ perPage: 1000 })
+    if (data?.users) {
+      data.users.forEach((u: any) => {
+        const name = u.user_metadata?.full_name || u.email?.split('@')[0] || 'User'
+        userMap.set(u.id, { email: u.email, name })
+      })
+    }
+  } catch (err) {
+    console.warn('Failed to list users for uploader lookup:', err)
+  }
+
+  return rows.map(row => {
+    const uploader = row.uploaded_by ? userMap.get(row.uploaded_by) : undefined
+    return {
+      ...row,
+      tags: (row.tags || []).map((t: any) => t.tag).filter(Boolean),
+      uploaderEmail: uploader?.email || (row.uploaded_by ? `User (${row.uploaded_by.slice(0, 8)})` : undefined),
+      uploaderName: uploader?.name || (row.uploaded_by ? `User (${row.uploaded_by.slice(0, 8)})` : undefined),
+    }
+  })
+}
 
 function formatThesisRows(rows: any[]): AdminThesisItem[] {
   return rows.map(row => ({

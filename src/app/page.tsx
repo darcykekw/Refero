@@ -2,10 +2,11 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { Suspense } from 'react'
 import { getCurrentUser } from '@/lib/auth'
-import { getSiteStats, getFeaturedTheses, getAllPrograms } from '@/lib/data'
+import { getSiteStats, getFeaturedTheses, getAllPrograms, getAllVerifiedTheses } from '@/lib/data'
 import { getUserBookmarkMap } from '@/lib/bookmarks'
-import ThesisCard from '@/components/ThesisCard'
+import RecentThesesDeck from '@/components/RecentThesesDeck'
 import ProgramCarousel from '@/components/ProgramCarousel'
+import AllThesesSection from '@/components/AllThesesSection'
 
 export const metadata: Metadata = {
   title: 'Home',
@@ -20,10 +21,11 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const { program: programId } = await searchParams
 
   const user = await getCurrentUser()
-  const [stats, programs, featured, bookmarkMap] = await Promise.all([
+  const [stats, programs, featured, allTheses, bookmarkMap] = await Promise.all([
     getSiteStats(),
     getAllPrograms(),
     getFeaturedTheses(programId),
+    getAllVerifiedTheses(),
     user ? getUserBookmarkMap(user.id) : Promise.resolve({} as Record<string, string[]>),
   ])
 
@@ -140,8 +142,23 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         </div>
       </header>
 
-      {/* ── Browse by Program ──────────────────────────────────────────────── */}
+      {/* ── Recently Uploaded Theses ─────────────────────────────────────── */}
       <section className="w-full animate-fade-in-up delay-150">
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
+          <div className="section-header" style={{ marginBottom: 0 }}>
+            <h2 className="section-title">
+              {programId
+                ? `Recent Theses in ${programs.find(p => p.id === programId)?.prog_name ?? 'Program'}`
+                : 'Recently Uploaded Theses'}
+            </h2>
+          </div>
+        </div>
+
+        <RecentThesesDeck theses={featured} bookmarkMap={bookmarkMap} />
+      </section>
+
+      {/* ── Browse by Program ──────────────────────────────────────────────── */}
+      <section className="w-full animate-fade-in-up delay-200">
         <div className="section-header">
           <h2 className="section-title">Browse by Program</h2>
         </div>
@@ -150,52 +167,14 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         </Suspense>
       </section>
 
-      {/* ── Featured Theses ────────────────────────────────────────────────── */}
-      <section className="w-full animate-fade-in-up delay-300">
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.75rem' }}>
-          <div className="section-header" style={{ marginBottom: 0 }}>
-            <h2 className="section-title">
-              {programId
-                ? `Latest in ${programs.find(p => p.id === programId)?.prog_name ?? 'Program'}`
-                : 'Featured Theses'}
-            </h2>
-          </div>
-          <Link
-            href="/theses"
-            className="action-pill"
-          >
-            <span>View all</span>
-            <svg style={{ width: 15, height: 15 }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
-            </svg>
-          </Link>
-        </div>
-
-        {featured.length > 0 ? (
-          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {featured.map(thesis => (
-              <ThesisCard
-                key={thesis.id}
-                thesis={thesis}
-                isBookmarked={Boolean(bookmarkMap[thesis.id]?.length)}
-              />
-            ))}
-          </div>
-        ) : (
-          <div
-            style={{ background: '#fff', border: '1px solid #D2DDD4', borderRadius: '1.25rem', boxShadow: '0 1px 3px rgba(17,33,23,0.07)', padding: '4rem 2rem', textAlign: 'center' }}
-          >
-            <div style={{ fontSize: '3rem', marginBottom: '0.75rem' }}>📭</div>
-            <p style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: '1.25rem', fontWeight: 700, color: '#112117' }}>No theses yet</p>
-            <p style={{ fontSize: '0.9rem', color: '#7C9283', marginTop: '0.5rem' }}>
-              {programId ? 'No theses in this program yet.' : 'Be the first to upload a thesis!'}
-            </p>
-            <Link href="/theses/upload" className="btn btn-primary mt-5 inline-flex">
-              Upload a Thesis
-            </Link>
-          </div>
-        )}
-      </section>
+      {/* ── All Theses (Archive with Pagination by 9) ─── */}
+      <Suspense fallback={<div className="skeleton h-96 rounded-2xl" />}>
+        <AllThesesSection
+          initialTheses={allTheses.length > 0 ? allTheses : featured}
+          programs={programs}
+          bookmarkMap={bookmarkMap}
+        />
+      </Suspense>
     </div>
   )
 }

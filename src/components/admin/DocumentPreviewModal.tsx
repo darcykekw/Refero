@@ -222,6 +222,24 @@ export default function DocumentPreviewModal({
                 </p>
               </div>
 
+              {/* Uploader Account Info */}
+              <div className="p-3.5 rounded-xl bg-emerald-50/70 border border-emerald-200/80 flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] uppercase tracking-wider font-bold text-emerald-800">Uploaded by User</p>
+                  <p className="text-sm font-semibold text-slate-900 mt-0.5">
+                    {thesis.uploaderName || 'Registered User'}
+                  </p>
+                  {thesis.uploaderEmail && (
+                    <p className="text-xs text-slate-600 font-mono mt-0.5">{thesis.uploaderEmail}</p>
+                  )}
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] font-mono text-slate-500 bg-white px-2 py-1 rounded border border-emerald-200 shadow-2xs">
+                    UID: {thesis.uploaded_by ? thesis.uploaded_by.slice(0, 8) + '…' : 'N/A'}
+                  </span>
+                </div>
+              </div>
+
               {/* Authors & Adviser */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 rounded-xl bg-slate-50 border border-slate-200/80">
                 <div>

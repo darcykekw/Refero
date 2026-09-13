@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import Image from 'next/image'
 import { getCurrentUser } from '@/lib/auth'
 import NavbarClient from './NavbarClient'
 
@@ -18,20 +19,26 @@ export default async function Navbar() {
 
           {/* Logo */}
           <Link href="/" className="flex items-center gap-3 group flex-shrink-0">
-            {/* Emerald/Sage crest icon */}
-            <div style={{
-              width: 38, height: 38,
-              background: 'linear-gradient(135deg, #2E6A47 0%, #4A815B 50%, #8FA885 100%)',
-              borderRadius: '8px',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              boxShadow: '0 2px 10px rgba(46, 106, 71, 0.4)',
-              transition: 'transform 0.2s ease, box-shadow 0.2s ease',
-            }} className="group-hover:scale-105 group-hover:shadow-lg">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 2L2 7l10 5 10-5-10-5z"/>
-                <path d="M2 17l10 5 10-5"/>
-                <path d="M2 12l10 5 10-5"/>
-              </svg>
+            <div
+              style={{
+                width: 38,
+                height: 38,
+                borderRadius: '8px',
+                overflow: 'hidden',
+                boxShadow: '0 2px 10px rgba(10, 24, 16, 0.4)',
+                border: '1px solid rgba(143, 168, 133, 0.35)',
+                transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+              }}
+              className="group-hover:scale-105 group-hover:shadow-lg relative shrink-0 bg-[#173B28]"
+            >
+              <Image
+                src="/refero_logo.png"
+                alt="Refero Logo"
+                width={38}
+                height={38}
+                className="w-full h-full object-cover"
+                priority
+              />
             </div>
 
             <div>

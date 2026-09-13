@@ -207,6 +207,45 @@ export const getFeaturedTheses = cache(async (programId?: string): Promise<Thesi
   return []
 })
 
+export const getAllVerifiedTheses = cache(async (): Promise<ThesisWithRelations[]> => {
+  try {
+    const supabase = await createClient()
+    let { data, error } = await supabase
+      .from('theses')
+      .select(`*, college:colleges(*), program:programs(*), tags:thesis_tags(tag:tags(*))`)
+      .or('status.eq.verified,status.is.null')
+      .order('date_added', { ascending: false })
+
+    if (error && (error as any).code === '42703') {
+      const fallbackRes = await supabase
+        .from('theses')
+        .select(`*, college:colleges(*), program:programs(*), tags:thesis_tags(tag:tags(*))`)
+        .order('date_added', { ascending: false })
+      data = fallbackRes.data
+      error = fallbackRes.error
+    }
+
+    if (!error && data && data.length > 0) {
+      return flattenTags(data)
+    }
+
+    try {
+      const admin = createAdminClient()
+      const adminRes = await admin
+        .from('theses')
+        .select(`*, college:colleges(*), program:programs(*), tags:thesis_tags(tag:tags(*))`)
+        .or('status.eq.verified,status.is.null')
+        .order('date_added', { ascending: false })
+      if (!adminRes.error && adminRes.data && adminRes.data.length > 0) {
+        return flattenTags(adminRes.data)
+      }
+    } catch {}
+  } catch (err) {
+    console.warn('getAllVerifiedTheses error:', err)
+  }
+  return []
+})
+
 // ── Colleges & programs (for filters and form pickers) ───────────────────────
 
 import { DEFAULT_COLLEGES, DEFAULT_PROGRAMS, DEFAULT_TAGS, DEFAULT_THESES, getProgramLogoUrl } from '@/lib/constants/programs'
@@ -501,7 +540,7 @@ async function intersectTagsInMemory(
 
 // ── Available tags (for filter panel) ────────────────────────────────────────
 
-export const getAvailableTags = cache(async (limit = 40): Promise<Tag[]> => {
+export const getAvailableTags = cache(async (limit = 150): Promise<Tag[]> => {
   try {
     const supabase = await createClient()
     const { data } = await runWithRetry(() =>
@@ -512,6 +551,16 @@ export const getAvailableTags = cache(async (limit = 40): Promise<Tag[]> => {
         .limit(limit)
     )
     if (data && data.length > 0) return data
+
+    try {
+      const admin = createAdminClient()
+      const { data: adminData } = await admin
+        .from('tags')
+        .select('*')
+        .order('name')
+        .limit(limit)
+      if (adminData && adminData.length > 0) return adminData
+    } catch {}
   } catch {}
   return DEFAULT_TAGS.slice(0, limit)
 })

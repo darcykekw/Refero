@@ -165,6 +165,7 @@ export default function VerificationQueueTable({ initialTheses }: VerificationQu
                   <th className="py-3.5 px-4">Author(s)</th>
                   <th className="py-3.5 px-4">Title</th>
                   <th className="py-3.5 px-4">Program</th>
+                  <th className="py-3.5 px-4">Uploaded By</th>
                   <th className="py-3.5 px-4 text-center">Manuscript</th>
                   <th className="py-3.5 px-4 text-right">Actions</th>
                 </tr>
@@ -209,6 +210,18 @@ export default function VerificationQueueTable({ initialTheses }: VerificationQu
                         <span className="px-2.5 py-1 rounded-md bg-emerald-50 text-emerald-800 font-semibold text-[11px] border border-emerald-100">
                           {thesis.program?.prog_name || 'Program'}
                         </span>
+                      </td>
+                      <td className="py-3.5 px-4 whitespace-nowrap">
+                        <div className="flex flex-col">
+                          <span className="font-semibold text-slate-800 text-[11px] truncate max-w-[150px]">
+                            {thesis.uploaderName || 'User'}
+                          </span>
+                          {thesis.uploaderEmail && (
+                            <span className="text-[10px] text-slate-400 font-mono truncate max-w-[150px]">
+                              {thesis.uploaderEmail}
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="py-3.5 px-4 text-center whitespace-nowrap">
                         {thesis.pdf_file ? (

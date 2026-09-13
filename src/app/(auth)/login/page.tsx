@@ -46,15 +46,36 @@ function LoginForm() {
         
         {/* Brand / Title */}
         <div className="mb-7">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[rgba(143,168,133,0.15)] border border-[rgba(143,168,133,0.3)] mb-3">
-            <span className="w-2 h-2 rounded-full bg-[#29593D]" />
-            <span className="text-[11px] font-bold tracking-wider text-[#29593D] uppercase">
-              Refero · College of Sciences
-            </span>
-          </div>
+          <Link href="/" className="inline-flex items-center gap-3.5 mb-5 group">
+            <div className="w-12 h-12 rounded-xl overflow-hidden shadow-[0_4px_16px_rgba(23,59,40,0.25)] border border-[rgba(143,168,133,0.4)] bg-[#173B28] flex items-center justify-center transition-transform group-hover:scale-105 duration-200 shrink-0">
+              <Image
+                src="/refero_logo.png"
+                alt="Refero Logo"
+                width={48}
+                height={48}
+                className="w-full h-full object-cover"
+                priority
+              />
+            </div>
+            <div>
+              <p
+                style={{ fontFamily: "'Playfair Display', Georgia, serif" }}
+                className="text-xl font-bold text-[#173B28] tracking-tight leading-none group-hover:text-[#2E6A47] transition-colors"
+              >
+                REFERO
+              </p>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-[#598567] mt-0.5">
+                College of Sciences
+              </p>
+            </div>
+          </Link>
+
           <h1 className="text-3xl sm:text-4xl font-bold text-slate-900 tracking-tight">
             Log in
           </h1>
+          <p className="text-sm text-slate-500 mt-1">
+            Access the academic thesis repository and manage your research
+          </p>
         </div>
 
         {/* Notices */}

@@ -12,7 +12,7 @@ interface NavbarClientProps {
 
 const NAV_LINKS = [
   { href: '/',              label: 'Home'      },
-  { href: '/theses',        label: 'Theses'    },
+  { href: '/theses',        label: 'My Theses' },
   { href: '/theses/upload', label: 'Upload'    },
   { href: '/bookmarks',     label: 'Bookmarks' },
 ]
@@ -24,6 +24,7 @@ export default function NavbarClient({ initialUser }: NavbarClientProps) {
   const [menuOpen, setMenuOpen] = useState(false)
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
+  const [navSearchQuery, setNavSearchQuery] = useState('')
   const dropdownRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -54,6 +55,61 @@ export default function NavbarClient({ initialUser }: NavbarClientProps) {
     router.refresh()
   }
 
+  // Keep navbar search input in sync with URL on /search and listen to in-page search changes
+  useEffect(() => {
+    if (typeof window !== 'undefined' && pathname === '/search') {
+      const params = new URLSearchParams(window.location.search)
+      const q = params.get('q') || ''
+      setNavSearchQuery(q)
+    } else if (pathname !== '/search') {
+      setNavSearchQuery('')
+    }
+  }, [pathname])
+
+  useEffect(() => {
+    function onQueryChange(e: Event) {
+      const customEvent = e as CustomEvent<string>
+      if (typeof customEvent.detail === 'string') {
+        setNavSearchQuery(customEvent.detail)
+      }
+    }
+    function onPopState() {
+      if (pathname === '/search') {
+        const params = new URLSearchParams(window.location.search)
+        setNavSearchQuery(params.get('q') || '')
+      }
+    }
+    window.addEventListener('refero:query-change', onQueryChange)
+    window.addEventListener('popstate', onPopState)
+    return () => {
+      window.removeEventListener('refero:query-change', onQueryChange)
+      window.removeEventListener('popstate', onPopState)
+    }
+  }, [pathname])
+
+  function handleNavSearch(e: React.FormEvent) {
+    e.preventDefault()
+    setMenuOpen(false)
+    const q = navSearchQuery.trim()
+    if (pathname === '/search') {
+      const params = new URLSearchParams(window.location.search)
+      if (q) {
+        params.set('q', q)
+      } else {
+        params.delete('q')
+      }
+      const newUrl = params.toString() ? `/search?${params.toString()}` : '/search'
+      window.history.replaceState(null, '', newUrl)
+      window.dispatchEvent(new CustomEvent('refero:query-change', { detail: q }))
+    } else {
+      if (q) {
+        router.push(`/search?q=${encodeURIComponent(q)}`)
+      } else {
+        router.push('/search')
+      }
+    }
+  }
+
   const displayName = user?.user_metadata?.full_name
     ?? user?.email?.split('@')[0]
     ?? 'User'
@@ -77,7 +133,7 @@ export default function NavbarClient({ initialUser }: NavbarClientProps) {
   return (
     <>
       {/* Desktop nav */}
-      <nav className="hidden md:flex items-center gap-1">
+      <nav className="hidden md:flex items-center gap-1.5">
         {NAV_LINKS.map(link => {
           const isActive = pathname === link.href
           return (
@@ -85,27 +141,27 @@ export default function NavbarClient({ initialUser }: NavbarClientProps) {
               key={link.href}
               href={link.href}
               style={{
-                padding: '0.4rem 1rem',
+                padding: '0.4rem 0.875rem',
                 borderRadius: '6px',
                 fontSize: '0.875rem',
                 fontWeight: isActive ? 600 : 500,
                 letterSpacing: '0.01em',
                 textDecoration: 'none',
-                color: isActive ? '#A3C49B' : 'rgba(255,255,255,0.75)',
-                background: isActive ? 'rgba(143,168,133,0.16)' : 'transparent',
-                border: isActive ? '1px solid rgba(143,168,133,0.3)' : '1px solid transparent',
+                color: isActive ? '#A3C49B' : 'rgba(255,255,255,0.85)',
+                background: isActive ? 'rgba(143,168,133,0.22)' : 'rgba(17,36,26,0.6)',
+                border: isActive ? '1px solid rgba(143,168,133,0.45)' : '1px solid rgba(143,168,133,0.15)',
                 transition: 'all 0.15s ease',
               }}
               onMouseEnter={e => {
                 if (!isActive) {
                   (e.target as HTMLElement).style.color = '#fff'
-                  ;(e.target as HTMLElement).style.background = 'rgba(255,255,255,0.08)'
+                  ;(e.target as HTMLElement).style.background = 'rgba(255,255,255,0.12)'
                 }
               }}
               onMouseLeave={e => {
                 if (!isActive) {
-                  (e.target as HTMLElement).style.color = 'rgba(255,255,255,0.75)'
-                  ;(e.target as HTMLElement).style.background = 'transparent'
+                  (e.target as HTMLElement).style.color = 'rgba(255,255,255,0.85)'
+                  ;(e.target as HTMLElement).style.background = 'rgba(17,36,26,0.6)'
                 }
               }}
             >
@@ -114,11 +170,40 @@ export default function NavbarClient({ initialUser }: NavbarClientProps) {
           )
         })}
 
+        {/* Search bar directly to the right of Bookmarks */}
+        <form onSubmit={handleNavSearch} className="relative flex items-center ml-1">
+          <div className="relative flex items-center">
+            <input
+              id="navbar-thesis-search"
+              type="search"
+              value={navSearchQuery}
+              onChange={e => setNavSearchQuery(e.target.value)}
+              placeholder="Search thesis..."
+              className="text-xs text-white placeholder:text-emerald-200/60 pl-8 pr-2.5 py-1.5 rounded-lg transition-all focus:outline-none focus:ring-1 focus:ring-emerald-400"
+              style={{
+                background: '#143021',
+                border: '1px solid rgba(143, 168, 133, 0.4)',
+                width: '165px',
+              }}
+            />
+            <button
+              type="submit"
+              aria-label="Search thesis"
+              className="absolute left-2.5 text-emerald-300 hover:text-white flex items-center justify-center"
+              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </button>
+          </div>
+        </form>
+
         {isAdmin && (
           <Link
             href="/admin"
             style={{
-              padding: '0.4rem 0.9rem',
+              padding: '0.4rem 0.85rem',
               borderRadius: '6px',
               fontSize: '0.8125rem',
               fontWeight: 700,
@@ -126,10 +211,10 @@ export default function NavbarClient({ initialUser }: NavbarClientProps) {
               textTransform: 'uppercase',
               textDecoration: 'none',
               color: '#FDE047',
-              background: 'rgba(234, 179, 8, 0.15)',
-              border: '1px solid rgba(234, 179, 8, 0.4)',
+              background: 'rgba(234, 179, 8, 0.18)',
+              border: '1px solid rgba(234, 179, 8, 0.45)',
               transition: 'all 0.15s ease',
-              marginLeft: '0.25rem',
+              marginLeft: '0.2rem',
             }}
           >
             🛡️ Admin
@@ -261,8 +346,8 @@ export default function NavbarClient({ initialUser }: NavbarClientProps) {
           onClick={() => setMenuOpen(prev => !prev)}
           aria-expanded={menuOpen}
           aria-label="Toggle navigation menu"
-          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 8, borderRadius: 8, border: 'none', cursor: 'pointer', background: 'rgba(255,255,255,0.08)', color: '#fff' }}
-          className="md:hidden"
+          style={{ padding: 8, borderRadius: 8, border: 'none', cursor: 'pointer', background: 'rgba(255,255,255,0.08)', color: '#fff' }}
+          className="flex md:hidden items-center justify-center"
         >
           {menuOpen ? (
             <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -287,10 +372,37 @@ export default function NavbarClient({ initialUser }: NavbarClientProps) {
             borderTop: '1px solid rgba(143,168,133,0.2)',
             borderBottom: '1px solid rgba(143,168,133,0.15)',
             boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
-            padding: '8px 0',
+            padding: '10px 0',
             zIndex: 40,
           }}
         >
+          {/* Mobile search bar */}
+          <div style={{ padding: '4px 20px 10px' }}>
+            <form onSubmit={handleNavSearch} className="relative flex items-center">
+              <input
+                type="search"
+                value={navSearchQuery}
+                onChange={e => setNavSearchQuery(e.target.value)}
+                placeholder="Search thesis..."
+                className="w-full text-sm text-white placeholder:text-emerald-200/60 pl-9 pr-3 py-2 rounded-lg transition-all focus:outline-none focus:ring-1 focus:ring-emerald-400"
+                style={{
+                  background: '#143021',
+                  border: '1px solid rgba(143, 168, 133, 0.4)',
+                }}
+              />
+              <button
+                type="submit"
+                aria-label="Search thesis"
+                className="absolute left-3 text-emerald-300 flex items-center justify-center"
+                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </button>
+            </form>
+          </div>
+
           {NAV_LINKS.map(link => {
             const isActive = pathname === link.href
             return (
@@ -300,10 +412,10 @@ export default function NavbarClient({ initialUser }: NavbarClientProps) {
                 style={{
                   display: 'block', padding: '12px 24px',
                   fontSize: '0.9375rem', fontWeight: isActive ? 600 : 500,
-                  color: isActive ? '#A3C49B' : 'rgba(255,255,255,0.8)',
+                  color: isActive ? '#A3C49B' : 'rgba(255,255,255,0.85)',
                   textDecoration: 'none',
-                  background: isActive ? 'rgba(143,168,133,0.12)' : 'transparent',
-                  borderLeft: isActive ? '3px solid #8FA885' : '3px solid transparent',
+                  background: isActive ? 'rgba(143,168,133,0.18)' : '#11241A',
+                  borderLeft: isActive ? '3px solid #8FA885' : '3px solid rgba(143,168,133,0.15)',
                   transition: 'all 0.15s',
                 }}
               >
@@ -332,13 +444,13 @@ export default function NavbarClient({ initialUser }: NavbarClientProps) {
           )}
           {user && (
             <>
-              <Link href="/profile" style={{ display: 'block', padding: '12px 24px', fontSize: '0.9375rem', color: 'rgba(255,255,255,0.8)', textDecoration: 'none', borderLeft: '3px solid transparent' }}>
+              <Link href="/profile" style={{ display: 'block', padding: '12px 24px', fontSize: '0.9375rem', color: 'rgba(255,255,255,0.8)', textDecoration: 'none', borderLeft: '3px solid rgba(143,168,133,0.15)' }}>
                 Profile
               </Link>
               <button
                 onClick={handleSignOut}
                 disabled={signingOut}
-                style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '12px 24px', fontSize: '0.9375rem', fontWeight: 500, color: '#FCA5A5', background: 'none', border: 'none', cursor: 'pointer', borderLeft: '3px solid transparent' }}
+                style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '12px 24px', fontSize: '0.9375rem', fontWeight: 500, color: '#FCA5A5', background: 'none', border: 'none', cursor: 'pointer', borderLeft: '3px solid rgba(143,168,133,0.15)' }}
               >
                 {signingOut ? <span className="spinner h-4 w-4" /> : null}
                 Sign Out

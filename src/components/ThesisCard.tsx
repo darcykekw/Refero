@@ -9,6 +9,7 @@ interface ThesisCardProps {
   showActions?: boolean
   activeTags?: string[]
   isBookmarked?: boolean
+  onTagClick?: (tagName: string) => void
 }
 
 export default function ThesisCard({
@@ -16,6 +17,7 @@ export default function ThesisCard({
   showActions = false,
   activeTags = [],
   isBookmarked = false,
+  onTagClick,
 }: ThesisCardProps) {
   const abstract = thesis.abstract.length > 180
     ? thesis.abstract.slice(0, 180).trimEnd() + '…'
@@ -177,17 +179,43 @@ export default function ThesisCard({
           </p>
 
           {/* Tags */}
-          {thesis.tags.length > 0 && (
+          {Array.isArray(thesis.tags) && thesis.tags.length > 0 && (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.375rem' }}>
-              {thesis.tags.slice(0, 5).map(tag => (
-                <Link
-                  key={tag.id}
-                  href={`/theses?tag=${encodeURIComponent(tag.id)}`}
-                  className={`tag-chip ${activeTags.includes(tag.name) ? 'is-active' : ''}`}
-                >
-                  {tag.name}
-                </Link>
-              ))}
+              {thesis.tags.slice(0, 5).map((rawTag: any, idx: number) => {
+                const tagName = typeof rawTag === 'string' ? rawTag.trim() : (rawTag?.name || rawTag?.tag?.name || '').trim()
+                const tagId = (typeof rawTag === 'object' && rawTag?.id) ? rawTag.id : `${thesis.id}-tag-${idx}`
+                if (!tagName) return null
+                const isActive = activeTags.some(t => t.toLowerCase() === tagName.toLowerCase())
+
+                if (onTagClick) {
+                  return (
+                    <button
+                      key={tagId}
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        e.preventDefault()
+                        onTagClick(tagName)
+                      }}
+                      className={`tag-chip ${isActive ? 'is-active' : ''}`}
+                      style={{ border: 'none', cursor: 'pointer' }}
+                    >
+                      {tagName}
+                    </button>
+                  )
+                }
+
+                return (
+                  <Link
+                    key={tagId}
+                    href={`/search?tag=${encodeURIComponent(tagName)}`}
+                    className={`tag-chip ${isActive ? 'is-active' : ''}`}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {tagName}
+                  </Link>
+                )
+              })}
             </div>
           )}
 

@@ -116,13 +116,15 @@ export default function AdminSidebar({ pendingCount }: AdminSidebarProps) {
       {/* Brand Header */}
       <div className="p-5 pb-4 flex items-center gap-3">
         <div
-          className="w-10 h-10 rounded-2xl flex items-center justify-center font-serif text-lg font-bold text-white shadow-md"
-          style={{
-            background: 'linear-gradient(135deg, #173B28 0%, #2E6A47 100%)',
-            boxShadow: '0 6px 16px -2px rgba(23, 59, 40, 0.35)',
-          }}
+          className="w-10 h-10 rounded-xl overflow-hidden flex items-center justify-center shadow-md shrink-0 border border-[rgba(143,168,133,0.35)] bg-[#173B28]"
         >
-          R
+          <Image
+            src="/refero_logo.png"
+            alt="Refero Logo"
+            width={40}
+            height={40}
+            className="w-full h-full object-cover"
+          />
         </div>
         <div>
           <div className="flex items-center gap-1.5">

@@ -85,7 +85,6 @@ export default function ProgramCarousel({ programs, activeProgramId }: ProgramCa
 
   const show = useCallback(
     (idx: number) => {
-      setUserEngaged(true)
       setMoved({ index: (idx + items.length) % items.length, forActiveIndex: activeIndex })
     },
     [items.length, activeIndex]
@@ -93,10 +92,10 @@ export default function ProgramCarousel({ programs, activeProgramId }: ProgramCa
 
   const select = useCallback(
     (idx: number) => {
-      setUserEngaged(true)
-      setMoved({ index: idx, forActiveIndex: activeIndex })
+      const targetIndex = (idx + items.length) % items.length
+      setMoved({ index: targetIndex, forActiveIndex: activeIndex })
 
-      const program = items[idx]
+      const program = items[targetIndex]
       const params = new URLSearchParams(searchParams.toString())
       if (program.id && program.id !== activeProgramId) {
         params.set('program', program.id)
@@ -110,23 +109,8 @@ export default function ProgramCarousel({ programs, activeProgramId }: ProgramCa
     [items, router, searchParams, activeIndex, activeProgramId]
   )
 
-
-  const showPrev = useCallback(() => show(current - 1), [show, current])
-  const showNext = useCallback(() => show(current + 1), [show, current])
-
-  useEffect(() => {
-    if (userEngaged || hovered || items.length < 2) return
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
-
-    const id = setInterval(() => {
-      setMoved(prev => {
-        const from = prev?.forActiveIndex === activeIndex ? prev.index : urlIndex
-        return { index: (from + 1) % items.length, forActiveIndex: activeIndex }
-      })
-    }, AUTO_ADVANCE_MS)
-
-    return () => clearInterval(id)
-  }, [userEngaged, hovered, items.length, activeIndex, urlIndex])
+  const showPrev = useCallback(() => select(current - 1), [select, current])
+  const showNext = useCallback(() => select(current + 1), [select, current])
 
   function onKeyDown(e: React.KeyboardEvent) {
     if (e.key === 'ArrowLeft') {
@@ -313,7 +297,7 @@ export default function ProgramCarousel({ programs, activeProgramId }: ProgramCa
                   maxWidth: `${slideWidthPct}%`,
                   opacity: isCentred ? 1 : 0.35,
                   transform: isCentred ? 'scale(1.04)' : 'scale(0.88)',
-                  background: 'transparent',
+                  background: 'none',
                   border: 'none',
                   boxShadow: 'none',
                   cursor: 'pointer',
@@ -421,8 +405,8 @@ export default function ProgramCarousel({ programs, activeProgramId }: ProgramCa
           <button
             key={prog.id ?? '__all'}
             type="button"
-            onClick={() => show(idx)}
-            aria-label={`Show ${prog.prog_name}`}
+            onClick={() => select(idx)}
+            aria-label={`Filter by ${prog.prog_name}`}
             className="h-1.5 rounded-full transition-all duration-300"
             style={{
               width: idx === current ? '1.5rem' : '0.45rem',

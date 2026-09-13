@@ -2,217 +2,77 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { Suspense } from 'react'
 import { getCurrentUser } from '@/lib/auth'
-import { getThesesList, getAvailableTags, getUserTheses } from '@/lib/data'
+import { getUserTheses } from '@/lib/data'
 import { getUserBookmarkMap } from '@/lib/bookmarks'
-import ThesisCard from '@/components/ThesisCard'
-import ThesisSearch from '@/components/ThesisSearch'
 import ThesesGridClient from '@/components/ThesesGridClient'
-import { DEFAULT_THESES, DEFAULT_TAGS } from '@/lib/constants/programs'
-import type { Tag, ThesisWithRelations } from '@/types/database'
+import type { ThesisWithRelations } from '@/types/database'
 
 export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
-  title: 'Theses',
-  description: 'Search and browse all university theses in the Refero repository. Filter by tags, search by title, authors, or abstract.',
+  title: 'My Theses',
+  description: 'Manage and track your submitted university theses in the Refero repository.',
 }
 
-interface ThesesPageProps {
-  searchParams: Promise<{
-    q?: string
-    tag?: string | string[]
-    page?: string
-  }>
-}
-
-export default async function ThesesPage({ searchParams }: ThesesPageProps) {
-  const params = await searchParams
-  const query = params.q?.trim() ?? ''
-  const rawTags = params.tag
-  const tagIds: string[] = rawTags
-    ? Array.isArray(rawTags) ? rawTags : [rawTags]
-    : []
-  const page = Math.max(1, parseInt(params.page ?? '1', 10))
-
+export default async function MyThesesPage() {
   const user = await getCurrentUser().catch(() => null)
-  let listResult = { theses: [] as ThesisWithRelations[], totalCount: 0, totalPages: 1, page: 1 }
-  let availableTags: Tag[] = DEFAULT_TAGS
+  let userTheses: ThesisWithRelations[] = []
   let bookmarkMap: Record<string, string[]> = {}
-  let userUploads: ThesisWithRelations[] = []
 
-  try {
-    const [lRes, tagsRes, bMapRes] = await Promise.all([
-      getThesesList({ query, tagIds, page }).catch(() => ({ theses: [] as ThesisWithRelations[], totalCount: 0, totalPages: 1, page })),
-      getAvailableTags(40).catch(() => DEFAULT_TAGS.slice(0, 40)),
-      user ? getUserBookmarkMap(user.id).catch(() => ({})) : Promise.resolve({} as Record<string, string[]>),
-    ])
-    listResult = lRes
-    availableTags = tagsRes ?? DEFAULT_TAGS
-    bookmarkMap = bMapRes ?? {}
-
-    if (user && !query && tagIds.length === 0) {
-      userUploads = await getUserTheses(user.id).catch(() => [])
+  if (user) {
+    try {
+      const [thesesRes, bMapRes] = await Promise.all([
+        getUserTheses(user.id).catch(() => []),
+        getUserBookmarkMap(user.id).catch(() => ({})),
+      ])
+      userTheses = thesesRes
+      bookmarkMap = bMapRes
+    } catch (err) {
+      console.warn('MyThesesPage load error:', err)
     }
-  } catch (err) {
-    console.warn('ThesesPage data load error:', err)
-  }
-
-  const { theses = [], totalCount = 0, totalPages = 1 } = listResult
-
-  // Build URL helper — preserves existing params, updates/removes one key
-  function buildUrl(updates: Record<string, string | null>) {
-    const p = new URLSearchParams()
-    if (query) p.set('q', query)
-    tagIds.forEach(t => p.append('tag', t))
-    if (page > 1) p.set('page', String(page))
-    Object.entries(updates).forEach(([k, v]) => {
-      if (v === null) p.delete(k)
-      else { p.delete(k); p.set(k, v) }
-    })
-    const s = p.toString()
-    return `/theses${s ? `?${s}` : ''}`
-  }
-
-  function toggleTagUrl(tagId: string) {
-    const p = new URLSearchParams()
-    if (query) p.set('q', query)
-    const next = tagIds.includes(tagId)
-      ? tagIds.filter(t => t !== tagId)
-      : [...tagIds, tagId]
-    next.forEach(t => p.append('tag', t))
-    return `/theses${p.toString() ? `?${p.toString()}` : ''}`
   }
 
   return (
     <div className="w-full max-w-7xl page-gutter py-6 sm:py-10 space-y-6 sm:space-y-8">
-
       {/* Breadcrumb */}
       <nav className="breadcrumb-bar" aria-label="Breadcrumb">
         <Link href="/">Home</Link>
         <span className="divider">/</span>
-        <span className="current">Theses</span>
+        <span className="current">My Theses</span>
       </nav>
 
-      {/* ── Page header + search ─────────────────────────────────────── */}
+      {/* ── Page Header ────────────────────────────────────────────── */}
       <div className="page-header-banner flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold" style={{ fontFamily: "'Playfair Display', Georgia, serif", color: '#112117' }}>Theses</h1>
-          <p className="text-sm mt-1" style={{ color: '#598567', fontWeight: 500 }}>
-            {totalCount.toLocaleString()} {totalCount === 1 ? 'thesis' : 'theses'} found
+          <div className="flex items-center gap-2 mb-1">
+            <span className="w-2 h-2 rounded-full bg-emerald-600" />
+            <span className="text-xs font-bold uppercase tracking-widest text-emerald-800">
+              Personal Repository
+            </span>
+          </div>
+          <h1 className="text-3xl font-bold" style={{ fontFamily: "'Playfair Display', Georgia, serif", color: '#112117' }}>
+            My Theses
+          </h1>
+          <p className="text-sm mt-1" style={{ color: '#435A4C', fontWeight: 500 }}>
+            Track and manage your submitted research manuscripts and verification status.
           </p>
         </div>
-        <Suspense>
-          <ThesisSearch initialQuery={query} />
-        </Suspense>
+
+        {user && (
+          <Link href="/theses/upload" className="btn btn-primary self-start sm:self-auto">
+            + Upload Thesis
+          </Link>
+        )}
       </div>
 
-      {/* ── Tag filter chips ─────────────────────────────────────────── */}
-      {availableTags.length > 0 && (
-        <div className="card p-4">
-          <p className="text-xs uppercase tracking-widest text-slate-400 font-semibold mb-3">
-            Filter by Tag
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {availableTags.map(tag => (
-              <Link
-                key={tag.id}
-                href={toggleTagUrl(tag.id)}
-                className={`tag-chip ${tagIds.includes(tag.id) ? 'is-active' : ''}`}
-              >
-                {tag.name}
-              </Link>
-            ))}
-          </div>
-
-          {tagIds.length > 0 && (
-            <div className="mt-3 flex items-center gap-3 text-sm text-slate-500 border-t border-slate-100 pt-3">
-              <span>
-                Active filters:{' '}
-                <strong className="text-slate-700">
-                  {availableTags.filter(t => tagIds.includes(t.id)).map(t => t.name).join(', ')}
-                </strong>
-              </span>
-              <Link
-                href={buildUrl({ tag: null, page: null })}
-                className="text-sky-600 hover:text-sky-700 font-medium"
-              >
-                Clear ×
-              </Link>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ── Theses Catalog & Uploads Grid ─────────────────────────── */}
-      <ThesesGridClient
-        initialTheses={theses}
-        initialUserUploads={userUploads}
-        availableTags={availableTags}
-        tagIds={tagIds}
-        bookmarkMap={bookmarkMap}
-        query={query}
-        userSignedIn={Boolean(user)}
-      />
-
-      {/* ── Pagination ───────────────────────────────────────────────── */}
-      {totalPages > 1 && (
-        <nav aria-label="Thesis pagination" className="flex flex-wrap items-center justify-center gap-2 pt-2">
-          <Link
-            href={buildUrl({ page: page > 1 ? String(page - 1) : null })}
-            aria-disabled={page === 1}
-            className={`btn btn-ghost btn-sm ${page === 1 ? 'opacity-40 pointer-events-none' : ''}`}
-          >
-            ← Previous
-          </Link>
-
-          {/* Page number pills */}
-          <div className="flex gap-1">
-            {(() => {
-              const total = totalPages
-              let pageNums: (number | null)[] = []
-              if (total <= 7) {
-                pageNums = Array.from({ length: total }, (_, j) => j + 1)
-              } else {
-                const start = Math.max(2, page - 2)
-                const end   = Math.min(total - 1, page + 2)
-                pageNums = [1]
-                if (start > 2) pageNums.push(null)
-                for (let n = start; n <= end; n++) pageNums.push(n)
-                if (end < total - 1) pageNums.push(null)
-                pageNums.push(total)
-              }
-              return pageNums.filter((v, i, a) => i === 0 || v !== a[i - 1]).map((n, i) =>
-                n === null ? (
-                  <span key={`ellipsis-${i}`} className="px-2 py-1 text-slate-400 text-sm">…</span>
-                ) : (
-                  <Link
-                    key={n}
-                    href={buildUrl({ page: n === 1 ? null : String(n) })}
-                    className={`h-8 w-8 rounded-lg flex items-center justify-center text-sm font-medium transition-colors ${
-                      n === page
-                        ? 'bg-sky-600 text-white'
-                        : 'text-slate-600 hover:bg-slate-100'
-                    }`}
-                    aria-current={n === page ? 'page' : undefined}
-                  >
-                    {n}
-                  </Link>
-                )
-              )
-            })()}
-          </div>
-
-
-          <Link
-            href={buildUrl({ page: page < totalPages ? String(page + 1) : null })}
-            aria-disabled={page === totalPages}
-            className={`btn btn-ghost btn-sm ${page === totalPages ? 'opacity-40 pointer-events-none' : ''}`}
-          >
-            Next →
-          </Link>
-        </nav>
-      )}
-
+      {/* ── My Theses Grid ─────────────────────────────────────────── */}
+      <Suspense fallback={<div className="skeleton h-80 rounded-2xl" />}>
+        <ThesesGridClient
+          initialUserTheses={userTheses}
+          bookmarkMap={bookmarkMap}
+          userSignedIn={Boolean(user)}
+        />
+      </Suspense>
     </div>
   )
 }

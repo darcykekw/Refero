@@ -2,6 +2,7 @@
 
 import { useActionState } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { forgotPassword } from '@/app/actions/auth'
 
 const initialState = { error: undefined, message: undefined }
@@ -10,8 +11,31 @@ export default function ForgotPasswordPage() {
   const [state, formAction, pending] = useActionState(forgotPassword, initialState)
 
   return (
-    <div className="card p-8 shadow-lg">
+    <div className="card p-8 shadow-lg max-w-md w-full">
       <div className="mb-6">
+        <Link href="/" className="inline-flex items-center gap-3 mb-4 group">
+          <div className="w-10 h-10 rounded-xl overflow-hidden shadow-sm border border-[rgba(143,168,133,0.4)] bg-[#173B28] flex items-center justify-center transition-transform group-hover:scale-105 duration-200 shrink-0">
+            <Image
+              src="/refero_logo.png"
+              alt="Refero Logo"
+              width={40}
+              height={40}
+              className="w-full h-full object-cover"
+              priority
+            />
+          </div>
+          <div>
+            <p
+              style={{ fontFamily: "'Playfair Display', Georgia, serif" }}
+              className="text-lg font-bold text-[#173B28] tracking-tight leading-none group-hover:text-[#2E6A47] transition-colors"
+            >
+              REFERO
+            </p>
+            <p className="text-[9px] font-bold uppercase tracking-widest text-[#598567] mt-0.5">
+              College of Sciences
+            </p>
+          </div>
+        </Link>
         <h1 className="text-2xl font-bold text-slate-900">Reset your password</h1>
         <p className="text-sm text-slate-500 mt-1">
           Enter your email and we&apos;ll send you a secure reset link.

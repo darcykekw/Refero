@@ -46,14 +46,15 @@ export default function ThesisFormClient({
     (t): t is Tag => Boolean(t && t.id && t.name)
   )
 
-  const initialCollegeId = initialData?.college_id || (effectiveColleges.length > 0 ? effectiveColleges[0].id : '')
-  const [selectedCollegeId, setSelectedCollegeId] = useState(initialCollegeId)
+  const scienceCollege = effectiveColleges.find(c => c.college_name.toLowerCase().includes('science')) || effectiveColleges[0]
+  const initialCollegeId = initialData?.college_id || scienceCollege?.id || (effectiveColleges.length > 0 ? effectiveColleges[0].id : '')
+  const [selectedCollegeId] = useState(initialCollegeId)
   const [selectedProgramId, setSelectedProgramId] = useState(initialData?.program_id ?? '')
 
   const filteredPrograms = effectivePrograms.filter(
     p => !selectedCollegeId || p.college_id === selectedCollegeId || effectiveColleges.length === 1
   )
-  const hasNoPrograms = selectedCollegeId !== '' && filteredPrograms.length === 0
+  const hasNoPrograms = filteredPrograms.length === 0
 
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>(() => {
     return (initialData?.tags ?? [])
@@ -312,32 +313,31 @@ export default function ThesisFormClient({
         </div>
       </div>
 
-      {/* College + Program */}
+      {/* College (Fixed to College of Sciences) + Degree Program */}
       <div className="grid sm:grid-cols-2 gap-4">
         <div>
-          <label htmlFor="thesis-college" className="block text-sm font-medium text-slate-700 mb-1">
-            College <span className="text-red-500">*</span>
+          <label className="block text-sm font-medium text-slate-700 mb-1">
+            College <span className="text-xs font-semibold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full ml-1">Exclusive Repository</span>
           </label>
-          <select
-            id="thesis-college"
-            name="college_id"
-            required
-            value={selectedCollegeId}
-            onChange={e => {
-              setSelectedCollegeId(e.target.value)
-              setSelectedProgramId('')
+          <input type="hidden" name="college_id" value={selectedCollegeId} />
+          <div
+            className="input flex items-center justify-between font-semibold"
+            style={{
+              backgroundColor: '#F3F6F3',
+              color: '#173B28',
+              border: '1.5px solid #8FA885',
+              cursor: 'default',
             }}
-            className="input"
           >
-            <option value="">Select a college…</option>
-            {effectiveColleges.map(c => (
-              <option key={c.id} value={c.id}>{c.college_name}</option>
-            ))}
-          </select>
+            <span>{scienceCollege?.college_name || 'College of Sciences'}</span>
+            <span className="text-xs text-emerald-700 font-bold bg-white px-2 py-0.5 rounded border border-emerald-300">
+              Fixed
+            </span>
+          </div>
         </div>
         <div>
           <label htmlFor="thesis-program" className="block text-sm font-medium text-slate-700 mb-1">
-            Program <span className="text-red-500">*</span>
+            Degree Program <span className="text-red-500">*</span>
           </label>
           <select
             id="thesis-program"
@@ -345,32 +345,13 @@ export default function ThesisFormClient({
             required
             value={selectedProgramId}
             onChange={e => setSelectedProgramId(e.target.value)}
-            disabled={!selectedCollegeId || hasNoPrograms}
-            aria-describedby={hasNoPrograms ? 'thesis-program-empty' : undefined}
-            className="input disabled:opacity-50"
+            className="input"
           >
-            <option value="">
-              {!selectedCollegeId
-                ? 'Select a college first'
-                : hasNoPrograms
-                  ? 'No programs available'
-                  : 'Select a program…'}
-            </option>
+            <option value="">Select degree program…</option>
             {filteredPrograms.map(p => (
               <option key={p.id} value={p.id}>{p.prog_name}</option>
             ))}
           </select>
-
-          {/* A college with no programs is a dead end: program_id is NOT NULL,
-              so the form can never be submitted. Say so, instead of leaving an
-              empty dropdown and a submit button that fails silently. */}
-          {hasNoPrograms && (
-            <p id="thesis-program-empty" className="mt-1.5 text-sm text-amber-700" role="alert">
-              No programs have been set up for this college yet, so a thesis
-              cannot be filed under it. Pick a different college, or ask an
-              administrator to add your program.
-            </p>
-          )}
         </div>
       </div>
 

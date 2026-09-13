@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
 
 interface AdminTopNavProps {
@@ -195,10 +196,15 @@ export default function AdminTopNav({ userEmail, userName, pendingCount = 0 }: A
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div className="flex items-center gap-2.5">
                 <div
-                  className="w-8 h-8 rounded-xl flex items-center justify-center font-serif text-sm font-bold text-white shadow-xs"
-                  style={{ background: 'linear-gradient(135deg, #173B28, #2E6A47)' }}
+                  className="w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center shadow-xs shrink-0 border border-[rgba(143,168,133,0.35)] bg-[#173B28]"
                 >
-                  R
+                  <Image
+                    src="/refero_logo.png"
+                    alt="Refero Logo"
+                    width={32}
+                    height={32}
+                    className="w-full h-full object-cover"
+                  />
                 </div>
                 <div>
                   <h2 className="font-serif font-bold text-slate-900 text-sm">Refero Admin</h2>

@@ -10,7 +10,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
       className="min-h-screen flex flex-col items-center justify-center px-4 py-8 sm:py-12 relative"
       style={{
         backgroundColor: 'var(--color-surface-2)',
-        backgroundImage: "url('/refero_back.png')",
+        backgroundImage: "url('/referoback1.png')",
         backgroundSize: 'cover',
         backgroundAttachment: 'fixed',
         backgroundPosition: 'center',
