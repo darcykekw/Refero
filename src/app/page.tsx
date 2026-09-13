@@ -33,10 +33,23 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     ?? user?.email?.split('@')[0]
     ?? 'Researcher'
 
+  // Collect unique tags from all uploaded verified theses as a resilient safeguard
+  const uniqueThesisTags = new Set<string>()
+  allTheses.forEach(t => {
+    (t.tags || []).forEach(tg => {
+      if (tg?.name) uniqueThesisTags.add(tg.name.toLowerCase().trim())
+    })
+  })
+  featured.forEach(t => {
+    (t.tags || []).forEach(tg => {
+      if (tg?.name) uniqueThesisTags.add(tg.name.toLowerCase().trim())
+    })
+  })
+
   const STATS = [
-    { label: 'Theses', value: Math.max(stats.thesis_count, featured.length), icon: '📄' },
+    { label: 'Theses', value: Math.max(stats.thesis_count, featured.length, allTheses.length), icon: '📄' },
     { label: 'Programs', value: Math.max(stats.program_count, programs.length), icon: '🎓' },
-    { label: 'Tags', value: stats.tag_count, icon: '🏷️' },
+    { label: 'Tags', value: Math.max(stats.tag_count, uniqueThesisTags.size), icon: '🏷️' },
   ]
 
   return (

@@ -68,34 +68,36 @@ export const getSiteStats = cache(async (): Promise<SiteStats> => {
   let tagCount = DEFAULT_TAGS.length
 
   try {
-    const supabase = await createClient()
-    const [theses, colleges, programs, tags] = await Promise.all([
-      supabase.from('theses').select('id', { count: 'exact', head: true }).or('status.eq.verified,status.is.null'),
-      supabase.from('colleges').select('id', { count: 'exact', head: true }),
-      supabase.from('programs').select('id', { count: 'exact', head: true }),
-      supabase.from('tags').select('id', { count: 'exact', head: true }),
-    ])
+    // 1. Query with adminClient to bypass RLS so all visitors (including non-signed-in guests) see exact counts
+    try {
+      const admin = createAdminClient()
+      const [adminTheses, adminColleges, adminPrograms, adminTags] = await Promise.all([
+        admin.from('theses').select('id', { count: 'exact', head: true }).or('status.eq.verified,status.is.null'),
+        admin.from('colleges').select('id', { count: 'exact', head: true }),
+        admin.from('programs').select('id', { count: 'exact', head: true }),
+        admin.from('tags').select('id', { count: 'exact', head: true }),
+      ])
 
-    if (theses.count != null && theses.count > 0) {
-      thesisCount = theses.count
-    } else {
-      try {
-        const admin = createAdminClient()
-        const adminTheses = await admin.from('theses').select('id', { count: 'exact', head: true }).or('status.eq.verified,status.is.null')
-        if (adminTheses.count != null) {
-          thesisCount = adminTheses.count
-        }
-      } catch {}
-    }
+      if (adminTheses.count != null && adminTheses.count > 0) thesisCount = adminTheses.count
+      if (adminColleges.count != null && adminColleges.count > 0) collegeCount = adminColleges.count
+      if (adminPrograms.count != null && adminPrograms.count > 0) programCount = adminPrograms.count
+      if (adminTags.count != null && adminTags.count > 0) tagCount = adminTags.count
+    } catch {}
 
-    if (colleges.count != null && colleges.count > 0) {
-      collegeCount = colleges.count
-    }
-    if (programs.count != null && programs.count > 0) {
-      programCount = programs.count
-    }
-    if (tags.count != null && tags.count > 0) {
-      tagCount = tags.count
+    // 2. Fallback to standard client if adminClient was unavailable
+    if (tagCount <= DEFAULT_TAGS.length || thesisCount === 0) {
+      const supabase = await createClient()
+      const [theses, colleges, programs, tags] = await Promise.all([
+        supabase.from('theses').select('id', { count: 'exact', head: true }).or('status.eq.verified,status.is.null'),
+        supabase.from('colleges').select('id', { count: 'exact', head: true }),
+        supabase.from('programs').select('id', { count: 'exact', head: true }),
+        supabase.from('tags').select('id', { count: 'exact', head: true }),
+      ])
+
+      if (theses.count != null && theses.count > 0 && thesisCount === 0) thesisCount = theses.count
+      if (colleges.count != null && colleges.count > 0 && collegeCount === DEFAULT_COLLEGES.length) collegeCount = colleges.count
+      if (programs.count != null && programs.count > 0 && programCount === DEFAULT_PROGRAMS.length) programCount = programs.count
+      if (tags.count != null && tags.count > 0 && tagCount <= DEFAULT_TAGS.length) tagCount = tags.count
     }
   } catch (err) {
     console.warn('getSiteStats query error:', err)
