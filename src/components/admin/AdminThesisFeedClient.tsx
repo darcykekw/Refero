@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useMemo } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import type { AdminThesisItem } from '@/lib/admin-data'
@@ -36,7 +36,7 @@ export default function AdminThesisFeedClient({
   const [editTitle, setEditTitle] = useState('')
   const [editAuthors, setEditAuthors] = useState('')
   const [editAbstract, setEditAbstract] = useState('')
-  const [editYear, setEditYear] = useState(2024)
+  const [editYear, setEditYear] = useState(2026)
   const [editProgramId, setEditProgramId] = useState('')
   const [editStatus, setEditStatus] = useState<'pending' | 'verified' | 'rejected'>('verified')
   const [editTagIds, setEditTagIds] = useState<string[]>([])
@@ -46,6 +46,51 @@ export default function AdminThesisFeedClient({
     setTimeout(() => setToastMessage(null), 3500)
   }
 
+  // Aggregated complete list of tags across all uploaded theses + tags table
+  const completeTags = useMemo(() => {
+    const map = new Map<string, { id: string; name: string; count: number }>()
+
+    // 1. Collect all tags directly from all uploaded theses in feed
+    theses.forEach(t => {
+      (t.tags || []).forEach(tg => {
+        if (!tg || !tg.name) return
+        const key = tg.name.trim().toLowerCase()
+        const existing = map.get(key)
+        if (existing) {
+          existing.count += 1
+          if (!existing.id && tg.id) existing.id = tg.id
+        } else {
+          map.set(key, {
+            id: tg.id || `tag-${key}`,
+            name: tg.name.trim(),
+            count: 1,
+          })
+        }
+      })
+    })
+
+    // 2. Also merge any tags from props (from database tags table)
+    tags.forEach(tg => {
+      if (!tg || !tg.name) return
+      const key = tg.name.trim().toLowerCase()
+      const existing = map.get(key)
+      if (existing) {
+        if (tg.id) existing.id = tg.id
+        if (tg.count && tg.count > existing.count) {
+          existing.count = tg.count
+        }
+      } else if (tg.count && tg.count > 0) {
+        map.set(key, {
+          id: tg.id,
+          name: tg.name.trim(),
+          count: tg.count,
+        })
+      }
+    })
+
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name))
+  }, [theses, tags])
+
   // Filter theses
   const filteredTheses = theses.filter(t => {
     if (selectedProgram && t.program_id !== selectedProgram) return false
@@ -54,7 +99,10 @@ export default function AdminThesisFeedClient({
       if (status !== selectedStatus) return false
     }
     if (selectedTagId) {
-      const hasTag = (t.tags || []).some(tag => tag.id === selectedTagId)
+      const activeTag = completeTags.find(tg => tg.id === selectedTagId)
+      const hasTag = (t.tags || []).some(
+        tg => tg.id === selectedTagId || (activeTag && tg.name?.trim().toLowerCase() === activeTag.name.toLowerCase())
+      )
       if (!hasTag) return false
     }
     if (searchQuery.trim()) {
@@ -271,16 +319,16 @@ export default function AdminThesisFeedClient({
         </div>
 
         {/* Tag Selector */}
-        {tags.length > 0 && (
+        {completeTags.length > 0 && (
           <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center gap-1.5">
             <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mr-1">
               Tags:
             </span>
-            {tags.slice(0, 18).map(tag => {
+            {completeTags.map(tag => {
               const isActive = selectedTagId === tag.id
               return (
                 <button
-                  key={tag.id}
+                  key={tag.id || tag.name}
                   type="button"
                   onClick={() => setSelectedTagId(isActive ? null : tag.id)}
                   className={`px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all cursor-pointer ${

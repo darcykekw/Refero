@@ -175,7 +175,7 @@ export default async function AdminDashboardPage() {
                 </div>
 
                 <div className="px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-700">
-                  Academic Year 2024–2025
+                  Academic Year 2026–2027
                 </div>
               </div>
             </div>
@@ -283,7 +283,7 @@ export default async function AdminDashboardPage() {
                 <p className="text-xs text-slate-400">Research manuscript volume</p>
               </div>
               <span className="text-[11px] font-semibold text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-lg border border-emerald-100">
-                A.Y. 2024–2025
+                A.Y. 2026–2027
               </span>
             </div>
 

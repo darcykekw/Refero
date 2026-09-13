@@ -35,7 +35,7 @@ export default function ThesisMasterlistTable({
   const [editAuthors, setEditAuthors] = useState('')
   const [editAbstract, setEditAbstract] = useState('')
   const [editAdviser, setEditAdviser] = useState('')
-  const [editYear, setEditYear] = useState(2024)
+  const [editYear, setEditYear] = useState(2026)
   const [editProgramId, setEditProgramId] = useState('')
   const [editStatus, setEditStatus] = useState<'pending' | 'verified' | 'rejected'>('verified')
   const [editTagIds, setEditTagIds] = useState<string[]>([])
