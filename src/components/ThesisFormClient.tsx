@@ -1,6 +1,6 @@
 'use client'
 
-import { useActionState, useState, useEffect, useTransition } from 'react'
+import { useActionState, useState, useEffect, useTransition, useRef, useMemo, useCallback } from 'react'
 import type { College, Program, Tag, ThesisWithRelations } from '@/types/database'
 import type { ThesisActionState } from '@/app/actions/thesis'
 import { DEFAULT_COLLEGES, DEFAULT_PROGRAMS, DEFAULT_TAGS } from '@/lib/constants/programs'
@@ -61,6 +61,59 @@ export default function ThesisFormClient({
       .map(t => (t && typeof t === 'object' && 'id' in t ? t.id : ''))
       .filter(Boolean)
   })
+
+  // Tag search combobox and suggestions state
+  const [tagSearchQuery, setTagSearchQuery] = useState('')
+  const [isTagDropdownOpen, setIsTagDropdownOpen] = useState(false)
+  const [newTagsInput, setNewTagsInput] = useState('')
+  const tagDropdownRef = useRef<HTMLDivElement>(null)
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (tagDropdownRef.current && !tagDropdownRef.current.contains(event.target as Node)) {
+        setIsTagDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [])
+
+  // Filtered unselected existing tags for the search input
+  const availableUnselectedTags = useMemo(() => {
+    const unselected = effectiveTags.filter(t => t && t.id && !selectedTagIds.includes(t.id))
+    if (!tagSearchQuery.trim()) return unselected
+    const q = tagSearchQuery.trim().toLowerCase()
+    return unselected.filter(t => t.name.toLowerCase().includes(q))
+  }, [effectiveTags, selectedTagIds, tagSearchQuery])
+
+  // Select existing tag handler
+  const handleSelectTag = useCallback((id: string) => {
+    if (!id) return
+    setSelectedTagIds(prev => (prev.includes(id) ? prev : [...prev, id]))
+    setTagSearchQuery('')
+    setIsTagDropdownOpen(false)
+  }, [])
+
+  // Matching existing tags suggestion when user types in the "new tags" input
+  const matchingExistingForNewTags = useMemo(() => {
+    if (!newTagsInput.trim()) return []
+    const segments = newTagsInput
+      .split(',')
+      .map(s => s.trim().toLowerCase())
+      .filter(s => s.length >= 2)
+    if (segments.length === 0) return []
+
+    return effectiveTags
+      .filter(t => t && t.id && !selectedTagIds.includes(t.id))
+      .filter(t => {
+        const lower = t.name.toLowerCase()
+        return segments.some(seg => lower.includes(seg) || seg.includes(lower))
+      })
+      .slice(0, 8)
+  }, [newTagsInput, effectiveTags, selectedTagIds])
 
   useEffect(() => {
     if (state.success && state.localThesis) {
@@ -386,33 +439,89 @@ export default function ThesisFormClient({
         <p className="text-xs text-slate-400 mt-1">PDF only, max 20 MB</p>
       </div>
 
-      {/* Existing Tags Dropdown */}
-      <div>
-        <label htmlFor="thesis-tags-dropdown" className="block text-sm font-medium text-slate-700 mb-1">
-          Existing Tags <span className="text-slate-400 font-normal">(select from dropdown)</span>
+      {/* Existing Tags (Search & Select Dropdown Combobox) */}
+      <div className="relative" ref={tagDropdownRef}>
+        <label htmlFor="thesis-tags-search-input" className="block text-sm font-medium text-slate-700 mb-1">
+          Existing Tags <span className="text-slate-400 font-normal">(type to search or select from dropdown)</span>
         </label>
         <div className="space-y-3">
-          <select
-            id="thesis-tags-dropdown"
-            value=""
-            onChange={e => {
-              const val = e.target.value
-              if (val && !selectedTagIds.includes(val)) {
-                setSelectedTagIds(prev => [...prev, val])
-              }
-              e.target.value = ''
-            }}
-            className="input"
-          >
-            <option value="">Select an existing tag to add…</option>
-            {effectiveTags
-              .filter(t => t && t.id && !selectedTagIds.includes(t.id))
-              .map(t => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-          </select>
+          <div className="relative">
+            <div className="relative flex items-center">
+              <input
+                id="thesis-tags-search-input"
+                type="text"
+                value={tagSearchQuery}
+                onChange={e => {
+                  setTagSearchQuery(e.target.value)
+                  setIsTagDropdownOpen(true)
+                }}
+                onFocus={() => setIsTagDropdownOpen(true)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    if (availableUnselectedTags.length > 0) {
+                      handleSelectTag(availableUnselectedTags[0].id)
+                    }
+                  } else if (e.key === 'Escape') {
+                    setIsTagDropdownOpen(false)
+                  }
+                }}
+                placeholder="Type to search existing tags (e.g. AI, Bioinformatics)..."
+                className="input pr-10"
+                autoComplete="off"
+              />
+              <button
+                type="button"
+                onClick={() => setIsTagDropdownOpen(prev => !prev)}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 cursor-pointer"
+                title="Toggle existing tags list"
+                tabIndex={-1}
+              >
+                <svg
+                  className={`w-4 h-4 transition-transform duration-200 ${isTagDropdownOpen ? 'rotate-180' : ''}`}
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Dropdown Menu */}
+            {isTagDropdownOpen && (
+              <div className="absolute z-20 w-full mt-1.5 bg-white border border-slate-200 rounded-xl shadow-lg max-h-60 overflow-y-auto py-1 animate-scale-in">
+                {availableUnselectedTags.length > 0 ? (
+                  availableUnselectedTags.map(t => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => handleSelectTag(t.id)}
+                      className="w-full text-left px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-emerald-50 hover:text-emerald-900 transition-colors flex items-center justify-between cursor-pointer group"
+                    >
+                      <span>{t.name}</span>
+                      <span className="text-[10px] text-emerald-700 opacity-0 group-hover:opacity-100 transition-opacity font-bold">
+                        + Select
+                      </span>
+                    </button>
+                  ))
+                ) : (
+                  <div className="px-3.5 py-3 text-xs text-slate-500 text-center">
+                    {tagSearchQuery.trim() ? (
+                      <div>
+                        No existing tags match &ldquo;{tagSearchQuery}&rdquo;.
+                        <div className="mt-1 text-[11px] text-emerald-800">
+                          You can add it as a new tag in the field below!
+                        </div>
+                      </div>
+                    ) : (
+                      'All available tags have already been selected.'
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
 
           {/* Selected Tag Badges */}
           {selectedTagIds.length > 0 ? (
@@ -430,7 +539,7 @@ export default function ThesisFormClient({
                     <button
                       type="button"
                       onClick={() => setSelectedTagIds(prev => prev.filter(tid => tid !== id))}
-                      className="hover:text-red-700 hover:bg-emerald-200/80 rounded-full w-4 h-4 inline-flex items-center justify-center transition-colors font-bold text-sm"
+                      className="hover:text-red-700 hover:bg-emerald-200/80 rounded-full w-4 h-4 inline-flex items-center justify-center transition-colors font-bold text-sm cursor-pointer"
                       aria-label={`Remove ${name}`}
                     >
                       ×
@@ -440,7 +549,7 @@ export default function ThesisFormClient({
               })}
             </div>
           ) : (
-            <p className="text-xs text-slate-400 italic">No existing tags selected. Use the dropdown above to choose tags.</p>
+            <p className="text-xs text-slate-400 italic">No existing tags selected. Use the search or dropdown above to choose tags.</p>
           )}
         </div>
       </div>
@@ -454,9 +563,44 @@ export default function ThesisFormClient({
           id="thesis-new-tags"
           name="new_tags"
           type="text"
+          value={newTagsInput}
+          onChange={e => setNewTagsInput(e.target.value)}
           placeholder="e.g. machine learning, IoT, agriculture"
           className="input"
         />
+
+        {/* Real-time matching existing tags suggestions */}
+        {matchingExistingForNewTags.length > 0 && (
+          <div className="mt-2 p-3 bg-emerald-50/90 border border-emerald-200 rounded-xl animate-fade-in">
+            <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-900 mb-1.5">
+              <span>💡 Existing tags match what you typed:</span>
+              <span className="text-[11px] font-normal text-emerald-700">(click to select existing tag)</span>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {matchingExistingForNewTags.map(tag => (
+                <button
+                  key={tag.id}
+                  type="button"
+                  onClick={() => {
+                    handleSelectTag(tag.id)
+                    // Remove matching segment from newTagsInput
+                    setNewTagsInput(prev => {
+                      return prev
+                        .split(',')
+                        .map(s => s.trim())
+                        .filter(s => s.toLowerCase() !== tag.name.toLowerCase() && !tag.name.toLowerCase().includes(s.toLowerCase()))
+                        .join(', ')
+                    })
+                  }}
+                  className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-lg bg-white border border-emerald-300 text-emerald-900 hover:bg-[#173B28] hover:text-white hover:border-[#173B28] transition-all cursor-pointer shadow-xs"
+                  title={`Select existing tag: ${tag.name}`}
+                >
+                  <span>+ {tag.name}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Submit */}
