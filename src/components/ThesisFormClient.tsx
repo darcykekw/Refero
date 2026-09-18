@@ -62,11 +62,12 @@ export default function ThesisFormClient({
       .filter(Boolean)
   })
 
-  // Tag search combobox and suggestions state
-  const [tagSearchQuery, setTagSearchQuery] = useState('')
+  // Unified tag management state
+  const [newTagsList, setNewTagsList] = useState<string[]>([])
+  const [tagInput, setTagInput] = useState('')
   const [isTagDropdownOpen, setIsTagDropdownOpen] = useState(false)
-  const [newTagsInput, setNewTagsInput] = useState('')
   const tagDropdownRef = useRef<HTMLDivElement>(null)
+  const tagInputRef = useRef<HTMLInputElement>(null)
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -81,39 +82,103 @@ export default function ThesisFormClient({
     }
   }, [])
 
-  // Filtered unselected existing tags for the search input
+  // Filtered unselected existing tags for search
   const availableUnselectedTags = useMemo(() => {
     const unselected = effectiveTags.filter(t => t && t.id && !selectedTagIds.includes(t.id))
-    if (!tagSearchQuery.trim()) return unselected
-    const q = tagSearchQuery.trim().toLowerCase()
+    if (!tagInput.trim()) return unselected
+    const q = tagInput.trim().toLowerCase()
     return unselected.filter(t => t.name.toLowerCase().includes(q))
-  }, [effectiveTags, selectedTagIds, tagSearchQuery])
+  }, [effectiveTags, selectedTagIds, tagInput])
 
-  // Select existing tag handler
-  const handleSelectTag = useCallback((id: string) => {
+  // Does tagInput exactly match an already selected tag?
+  const hasExactSelectedMatch = useMemo(() => {
+    const clean = tagInput.trim().toLowerCase()
+    if (!clean) return false
+    const matchesExistingSelected = selectedTagIds.some(id => {
+      const tag = effectiveTags.find(t => t.id === id)
+      return tag?.name.toLowerCase() === clean
+    })
+    const matchesNewSelected = newTagsList.some(t => t.toLowerCase() === clean)
+    return matchesExistingSelected || matchesNewSelected
+  }, [tagInput, selectedTagIds, newTagsList, effectiveTags])
+
+  // Select an existing tag
+  const handleSelectExisting = useCallback((id: string) => {
     if (!id) return
     setSelectedTagIds(prev => (prev.includes(id) ? prev : [...prev, id]))
-    setTagSearchQuery('')
+    setTagInput('')
     setIsTagDropdownOpen(false)
+    tagInputRef.current?.focus()
   }, [])
 
-  // Matching existing tags suggestion when user types in the "new tags" input
-  const matchingExistingForNewTags = useMemo(() => {
-    if (!newTagsInput.trim()) return []
-    const segments = newTagsInput
-      .split(',')
-      .map(s => s.trim().toLowerCase())
-      .filter(s => s.length >= 2)
-    if (segments.length === 0) return []
+  // Add tag (matches existing tag if found, else creates new tag)
+  const handleAddTag = useCallback((rawName: string) => {
+    const trimmed = rawName.trim()
+    if (!trimmed) return
 
-    return effectiveTags
-      .filter(t => t && t.id && !selectedTagIds.includes(t.id))
-      .filter(t => {
-        const lower = t.name.toLowerCase()
-        return segments.some(seg => lower.includes(seg) || seg.includes(lower))
-      })
-      .slice(0, 8)
-  }, [newTagsInput, effectiveTags, selectedTagIds])
+    const matchedExisting = effectiveTags.find(
+      t => t.name.toLowerCase() === trimmed.toLowerCase()
+    )
+
+    if (matchedExisting) {
+      if (!selectedTagIds.includes(matchedExisting.id)) {
+        setSelectedTagIds(prev => [...prev, matchedExisting.id])
+      }
+    } else {
+      const alreadyInNew = newTagsList.some(
+        t => t.toLowerCase() === trimmed.toLowerCase()
+      )
+      if (!alreadyInNew) {
+        setNewTagsList(prev => [...prev, trimmed])
+      }
+    }
+    setTagInput('')
+    setIsTagDropdownOpen(false)
+  }, [effectiveTags, selectedTagIds, newTagsList])
+
+  const handleRemoveExisting = useCallback((id: string) => {
+    setSelectedTagIds(prev => prev.filter(tid => tid !== id))
+  }, [])
+
+  const handleRemoveNew = useCallback((name: string) => {
+    setNewTagsList(prev => prev.filter(t => t.toLowerCase() !== name.toLowerCase()))
+  }, [])
+
+  const handleTagInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault()
+      const trimmed = tagInput.trim()
+      if (!trimmed) return
+
+      const exactMatch = availableUnselectedTags.find(
+        t => t.name.toLowerCase() === trimmed.toLowerCase()
+      )
+      if (exactMatch) {
+        handleSelectExisting(exactMatch.id)
+      } else if (availableUnselectedTags.length > 0 && isTagDropdownOpen) {
+        handleSelectExisting(availableUnselectedTags[0].id)
+      } else {
+        handleAddTag(trimmed)
+      }
+    } else if (e.key === 'Backspace' && !tagInput) {
+      if (newTagsList.length > 0) {
+        setNewTagsList(prev => prev.slice(0, -1))
+      } else if (selectedTagIds.length > 0) {
+        setSelectedTagIds(prev => prev.slice(0, -1))
+      }
+    } else if (e.key === 'Escape') {
+      setIsTagDropdownOpen(false)
+    }
+  }
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    const text = e.clipboardData.getData('text')
+    if (text.includes(',')) {
+      e.preventDefault()
+      const parts = text.split(',').map(s => s.trim()).filter(Boolean)
+      parts.forEach(p => handleAddTag(p))
+    }
+  }
 
   useEffect(() => {
     if (state.success && state.localThesis) {
@@ -219,6 +284,24 @@ export default function ThesisFormClient({
 
       setUploadStatus('Saving thesis information...')
       const formData = new FormData(form)
+
+      // Ensure any pending text in tagInput is included
+      const pendingTag = tagInput.trim()
+      let finalSelectedTagIds = [...selectedTagIds]
+      let finalNewTags = [...newTagsList]
+      if (pendingTag) {
+        const match = effectiveTags.find(t => t.name.toLowerCase() === pendingTag.toLowerCase())
+        if (match && !finalSelectedTagIds.includes(match.id)) {
+          finalSelectedTagIds.push(match.id)
+        } else if (!match && !finalNewTags.some(t => t.toLowerCase() === pendingTag.toLowerCase())) {
+          finalNewTags.push(pendingTag)
+        }
+      }
+
+      formData.delete('tag_ids')
+      finalSelectedTagIds.forEach(id => formData.append('tag_ids', id))
+      formData.set('new_tags', finalNewTags.join(', '))
+
       if (pdfPath) {
         formData.set('pdf_path', pdfPath)
         formData.delete('pdf_file')
@@ -439,168 +522,177 @@ export default function ThesisFormClient({
         <p className="text-xs text-slate-400 mt-1">PDF only, max 20 MB</p>
       </div>
 
-      {/* Existing Tags (Search & Select Dropdown Combobox) */}
-      <div className="relative" ref={tagDropdownRef}>
-        <label htmlFor="thesis-tags-search-input" className="block text-sm font-medium text-slate-700 mb-1">
-          Existing Tags <span className="text-slate-400 font-normal">(type to search or select from dropdown)</span>
-        </label>
-        <div className="space-y-3">
-          <div className="relative">
-            <div className="relative flex items-center">
-              <input
-                id="thesis-tags-search-input"
-                type="text"
-                value={tagSearchQuery}
-                onChange={e => {
-                  setTagSearchQuery(e.target.value)
-                  setIsTagDropdownOpen(true)
-                }}
-                onFocus={() => setIsTagDropdownOpen(true)}
-                onKeyDown={e => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault()
-                    if (availableUnselectedTags.length > 0) {
-                      handleSelectTag(availableUnselectedTags[0].id)
-                    }
-                  } else if (e.key === 'Escape') {
-                    setIsTagDropdownOpen(false)
-                  }
-                }}
-                placeholder="Type to search existing tags (e.g. AI, Bioinformatics)..."
-                className="input pr-10"
-                autoComplete="off"
-              />
-              <button
-                type="button"
-                onClick={() => setIsTagDropdownOpen(prev => !prev)}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 cursor-pointer"
-                title="Toggle existing tags list"
-                tabIndex={-1}
-              >
-                <svg
-                  className={`w-4 h-4 transition-transform duration-200 ${isTagDropdownOpen ? 'rotate-180' : ''}`}
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </button>
-            </div>
+      {/* Tags (Select existing or create new) */}
+      <div className="relative space-y-2.5" ref={tagDropdownRef}>
+        <div className="flex items-center justify-between">
+          <label htmlFor="thesis-tags-input" className="block text-sm font-medium text-slate-700">
+            Tags <span className="text-slate-400 font-normal">(select existing or type to create new)</span>
+          </label>
+          <span className="text-xs text-slate-400">
+            Press <kbd className="px-1.5 py-0.5 bg-slate-100 border border-slate-200 rounded text-[11px] font-mono text-slate-600">Enter</kbd> or <kbd className="px-1.5 py-0.5 bg-slate-100 border border-slate-200 rounded text-[11px] font-mono text-slate-600">,</kbd> to add
+          </span>
+        </div>
 
-            {/* Dropdown Menu */}
-            {isTagDropdownOpen && (
-              <div className="absolute z-20 w-full mt-1.5 bg-white border border-slate-200 rounded-xl shadow-lg max-h-60 overflow-y-auto py-1 animate-scale-in">
+        {/* Unified Search & Tag Input */}
+        <div className="relative">
+          <div className="relative flex items-center">
+            <input
+              ref={tagInputRef}
+              id="thesis-tags-input"
+              type="text"
+              value={tagInput}
+              onChange={e => {
+                setTagInput(e.target.value)
+                setIsTagDropdownOpen(true)
+              }}
+              onFocus={() => setIsTagDropdownOpen(true)}
+              onKeyDown={handleTagInputKeyDown}
+              onPaste={handlePaste}
+              placeholder="Type to search existing tags or create a new tag..."
+              className="input pr-10"
+              autoComplete="off"
+            />
+            <button
+              type="button"
+              onClick={() => setIsTagDropdownOpen(prev => !prev)}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 cursor-pointer"
+              title="Toggle tags list"
+              tabIndex={-1}
+            >
+              <svg
+                className={`w-4 h-4 transition-transform duration-200 ${isTagDropdownOpen ? 'rotate-180' : ''}`}
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+          </div>
+
+          {/* Autocomplete & Creation Dropdown */}
+          {isTagDropdownOpen && (
+            <div className="absolute z-20 w-full mt-1.5 bg-white border border-slate-200 rounded-xl shadow-lg max-h-64 overflow-y-auto py-1 divide-y divide-slate-100 animate-scale-in">
+              {/* Option to create a new tag if what user typed isn't already selected */}
+              {tagInput.trim() && !hasExactSelectedMatch && (
+                <div className="p-1">
+                  <button
+                    type="button"
+                    onMouseDown={e => {
+                      e.preventDefault()
+                      handleAddTag(tagInput)
+                    }}
+                    className="w-full text-left px-3 py-2 rounded-lg text-xs font-semibold text-emerald-950 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition-colors flex items-center justify-between cursor-pointer group"
+                  >
+                    <span className="flex items-center gap-1.5 truncate">
+                      <span className="text-emerald-700">✨ Create new tag:</span>
+                      <span className="font-bold underline decoration-emerald-600 decoration-1 underline-offset-2 truncate">
+                        &ldquo;{tagInput.trim()}&rdquo;
+                      </span>
+                    </span>
+                    <span className="shrink-0 ml-2 px-2 py-0.5 rounded text-[10px] font-bold bg-[#173B28] text-white group-hover:bg-[#122e1f]">
+                      + Add Tag
+                    </span>
+                  </button>
+                </div>
+              )}
+
+              {/* Matching / Available Existing Tags */}
+              <div className="py-1">
+                <div className="px-3 py-1 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                  {tagInput.trim() ? 'Matching Existing Tags' : 'Available Existing Tags'}
+                </div>
                 {availableUnselectedTags.length > 0 ? (
                   availableUnselectedTags.map(t => (
                     <button
                       key={t.id}
                       type="button"
-                      onClick={() => handleSelectTag(t.id)}
-                      className="w-full text-left px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-emerald-50 hover:text-emerald-900 transition-colors flex items-center justify-between cursor-pointer group"
+                      onMouseDown={e => {
+                        e.preventDefault()
+                        handleSelectExisting(t.id)
+                      }}
+                      className="w-full text-left px-3 py-2 text-xs font-medium text-slate-700 hover:bg-emerald-50 hover:text-emerald-900 transition-colors flex items-center justify-between cursor-pointer group"
                     >
-                      <span>{t.name}</span>
-                      <span className="text-[10px] text-emerald-700 opacity-0 group-hover:opacity-100 transition-opacity font-bold">
+                      <span className="flex items-center gap-2 truncate">
+                        <span className="text-slate-400 group-hover:text-emerald-700">🏷️</span>
+                        <span className="font-semibold truncate">{t.name}</span>
+                      </span>
+                      <span className="text-[10px] text-emerald-800 font-bold opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-2">
                         + Select
                       </span>
                     </button>
                   ))
                 ) : (
-                  <div className="px-3.5 py-3 text-xs text-slate-500 text-center">
-                    {tagSearchQuery.trim() ? (
-                      <div>
-                        No existing tags match &ldquo;{tagSearchQuery}&rdquo;.
-                        <div className="mt-1 text-[11px] text-emerald-800">
-                          You can add it as a new tag in the field below!
-                        </div>
-                      </div>
-                    ) : (
-                      'All available tags have already been selected.'
-                    )}
+                  <div className="px-3 py-2 text-xs text-slate-500 italic">
+                    {tagInput.trim()
+                      ? 'No existing tags match your query.'
+                      : 'All existing tags have been selected.'}
                   </div>
                 )}
               </div>
-            )}
-          </div>
+            </div>
+          )}
+        </div>
 
-          {/* Selected Tag Badges */}
-          {selectedTagIds.length > 0 ? (
+        {/* Selected Tags List (Both existing and new custom) */}
+        <div className="space-y-1.5">
+          {/* Hidden inputs to pass data when submitting standard form */}
+          {selectedTagIds.map(id => (
+            <input key={`hidden-id-${id}`} type="hidden" name="tag_ids" value={id} />
+          ))}
+          <input type="hidden" name="new_tags" value={newTagsList.join(', ')} />
+
+          {selectedTagIds.length > 0 || newTagsList.length > 0 ? (
             <div className="flex flex-wrap gap-2 p-3 border border-emerald-900/20 rounded-xl bg-emerald-50/40 min-h-[44px] items-center">
+              {/* Existing tags chips */}
               {selectedTagIds.map(id => {
                 const tag = effectiveTags.find(t => t.id === id) || initialData?.tags?.find(t => t.id === id)
                 const name = tag?.name ?? id
                 return (
                   <span
-                    key={id}
-                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-900 border border-emerald-300 shadow-xs"
+                    key={`existing-${id}`}
+                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-900 border border-emerald-300 shadow-xs animate-fade-in"
                   >
-                    <input type="hidden" name="tag_ids" value={id} />
-                    <span>{name}</span>
+                    <span>🏷️ {name}</span>
                     <button
                       type="button"
-                      onClick={() => setSelectedTagIds(prev => prev.filter(tid => tid !== id))}
-                      className="hover:text-red-700 hover:bg-emerald-200/80 rounded-full w-4 h-4 inline-flex items-center justify-center transition-colors font-bold text-sm cursor-pointer"
-                      aria-label={`Remove ${name}`}
+                      onClick={() => handleRemoveExisting(id)}
+                      className="hover:text-red-700 hover:bg-emerald-200/80 rounded-full w-4 h-4 inline-flex items-center justify-center transition-colors font-bold text-sm cursor-pointer ml-0.5"
+                      aria-label={`Remove tag ${name}`}
                     >
                       ×
                     </button>
                   </span>
                 )
               })}
-            </div>
-          ) : (
-            <p className="text-xs text-slate-400 italic">No existing tags selected. Use the search or dropdown above to choose tags.</p>
-          )}
-        </div>
-      </div>
 
-      {/* New tags */}
-      <div>
-        <label htmlFor="thesis-new-tags" className="block text-sm font-medium text-slate-700 mb-1">
-          Add new tags <span className="text-slate-400 font-normal">(comma-separated)</span>
-        </label>
-        <input
-          id="thesis-new-tags"
-          name="new_tags"
-          type="text"
-          value={newTagsInput}
-          onChange={e => setNewTagsInput(e.target.value)}
-          placeholder="e.g. machine learning, IoT, agriculture"
-          className="input"
-        />
-
-        {/* Real-time matching existing tags suggestions */}
-        {matchingExistingForNewTags.length > 0 && (
-          <div className="mt-2 p-3 bg-emerald-50/90 border border-emerald-200 rounded-xl animate-fade-in">
-            <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-900 mb-1.5">
-              <span>💡 Existing tags match what you typed:</span>
-              <span className="text-[11px] font-normal text-emerald-700">(click to select existing tag)</span>
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {matchingExistingForNewTags.map(tag => (
-                <button
-                  key={tag.id}
-                  type="button"
-                  onClick={() => {
-                    handleSelectTag(tag.id)
-                    // Remove matching segment from newTagsInput
-                    setNewTagsInput(prev => {
-                      return prev
-                        .split(',')
-                        .map(s => s.trim())
-                        .filter(s => s.toLowerCase() !== tag.name.toLowerCase() && !tag.name.toLowerCase().includes(s.toLowerCase()))
-                        .join(', ')
-                    })
-                  }}
-                  className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-lg bg-white border border-emerald-300 text-emerald-900 hover:bg-[#173B28] hover:text-white hover:border-[#173B28] transition-all cursor-pointer shadow-xs"
-                  title={`Select existing tag: ${tag.name}`}
+              {/* New tags chips */}
+              {newTagsList.map(name => (
+                <span
+                  key={`new-${name}`}
+                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-sky-100 text-sky-900 border border-sky-300 shadow-xs animate-fade-in"
                 >
-                  <span>+ {tag.name}</span>
-                </button>
+                  <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.2 bg-sky-200/90 text-sky-800 rounded font-bold">
+                    New
+                  </span>
+                  <span>{name}</span>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveNew(name)}
+                    className="hover:text-red-700 hover:bg-sky-200/80 rounded-full w-4 h-4 inline-flex items-center justify-center transition-colors font-bold text-sm cursor-pointer ml-0.5"
+                    aria-label={`Remove new tag ${name}`}
+                  >
+                    ×
+                  </button>
+                </span>
               ))}
             </div>
-          </div>
-        )}
+          ) : (
+            <p className="text-xs text-slate-400 italic">
+              No tags selected. Type above to select existing tags or create custom ones.
+            </p>
+          )}
+        </div>
       </div>
 
       {/* Submit */}
