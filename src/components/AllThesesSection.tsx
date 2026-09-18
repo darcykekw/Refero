@@ -32,6 +32,7 @@ export default function AllThesesSection({
   const [selectedSort, setSelectedSort] = useState<SortOption>('newest')
   const [isSorting, setIsSorting] = useState<boolean>(false)
   const sortTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const isFirstMount = useRef(true)
   const [searchFilter, setSearchFilter] = useState<string>(urlQuery)
   const [currentPage, setCurrentPage] = useState<number>(1)
 
@@ -64,10 +65,19 @@ export default function AllThesesSection({
     setSearchFilter(urlQuery)
   }, [urlQuery])
 
-  // Reset page when filter changes
+  // Reset page when filter changes & trigger sorting skeleton
   useEffect(() => {
+    if (isFirstMount.current) {
+      isFirstMount.current = false
+      return
+    }
     setCurrentPage(1)
-  }, [selectedProgramId, selectedYear, searchFilter])
+    setIsSorting(true)
+    if (sortTimeoutRef.current) clearTimeout(sortTimeoutRef.current)
+    sortTimeoutRef.current = setTimeout(() => {
+      setIsSorting(false)
+    }, 450)
+  }, [selectedProgramId, selectedYear, searchFilter, selectedSort])
 
   const selectedProgram = useMemo(() => {
     return selectedProgramId ? programs.find(p => p.id === selectedProgramId) : null

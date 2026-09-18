@@ -180,13 +180,18 @@ export default function SearchInterfaceClient({
     }
   }, [])
 
-  // Reset pagination when filters change
+  // Reset pagination when filters change & trigger sorting skeleton
   useEffect(() => {
     if (isFirstMount.current) {
       isFirstMount.current = false
       return
     }
     setCurrentPage(1)
+    setIsSorting(true)
+    if (sortTimeoutRef.current) clearTimeout(sortTimeoutRef.current)
+    sortTimeoutRef.current = setTimeout(() => {
+      setIsSorting(false)
+    }, 450)
   }, [query, selectedTagNames, selectedYear, selectedProgramId, selectedSort])
 
   // Update URL search params smoothly without reloading or conflicting with useSearchParams
