@@ -49,6 +49,34 @@ function formatTagDisplayName(name: string): string {
   return name.charAt(0).toUpperCase() + name.slice(1)
 }
 
+function FilterSlidersIcon({
+  className = 'w-4 h-4',
+  circleFill = 'white',
+}: {
+  className?: string
+  circleFill?: string
+}) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <line x1="3" y1="6" x2="21" y2="6" />
+      <circle cx="8" cy="6" r="2.5" fill={circleFill} stroke="currentColor" strokeWidth={2} />
+      <line x1="3" y1="12" x2="21" y2="12" />
+      <circle cx="16" cy="12" r="2.5" fill={circleFill} stroke="currentColor" strokeWidth={2} />
+      <line x1="3" y1="18" x2="21" y2="18" />
+      <circle cx="9" cy="18" r="2.5" fill={circleFill} stroke="currentColor" strokeWidth={2} />
+    </svg>
+  )
+}
+
 export default function SearchInterfaceClient({
   initialTheses,
   availableTags,
@@ -79,8 +107,16 @@ export default function SearchInterfaceClient({
   const [selectedTagNames, setSelectedTagNames] = useState<string[]>(initialTagList)
   const [selectedYear, setSelectedYear] = useState<number | null>(initialYear ?? null)
   const [selectedProgramId, setSelectedProgramId] = useState<string | null>(null)
+  const [selectedSort, setSelectedSort] = useState<SortOption>(
+    (initialSort as SortOption) || (initialQuery ? 'relevance' : 'newest')
+  )
   const [currentPage, setCurrentPage] = useState<number>(1)
   const [showAllTags, setShowAllTags] = useState<boolean>(false)
+
+  // Tag filter dropdown / expandable state
+  const [isTagFilterOpen, setIsTagFilterOpen] = useState<boolean>(false)
+  const [tagSortMode, setTagSortMode] = useState<'popular' | 'alpha'>('popular')
+  const [tagSearchQuery, setTagSearchQuery] = useState<string>('')
 
   // Avoid circular URL update effects
   const isFirstMount = useRef(true)
@@ -111,6 +147,10 @@ export default function SearchInterfaceClient({
       setSelectedYear(yearParam ? Number(yearParam) : null)
       const progParam = params.get('program')
       setSelectedProgramId(progParam || null)
+      const sortParam = params.get('sort')
+      if (sortParam) {
+        setSelectedSort(sortParam as SortOption)
+      }
     }
 
     window.addEventListener('refero:query-change', onQueryChange)
@@ -128,25 +168,38 @@ export default function SearchInterfaceClient({
       return
     }
     setCurrentPage(1)
-  }, [query, selectedTagNames, selectedYear, selectedProgramId])
+  }, [query, selectedTagNames, selectedYear, selectedProgramId, selectedSort])
 
   // Update URL search params smoothly without reloading or conflicting with useSearchParams
-  const updateUrlParams = useCallback((newQuery: string, tags: string[], year: number | null, progId: string | null) => {
-    if (typeof window === 'undefined') return
-    const params = new URLSearchParams()
-    if (newQuery.trim()) params.set('q', newQuery.trim())
-    if (tags.length > 0) params.set('tag', tags.join(','))
-    if (year) params.set('year', String(year))
-    if (progId) params.set('program', progId)
+  const updateUrlParams = useCallback(
+    (
+      newQuery: string,
+      tags: string[],
+      year: number | null,
+      progId: string | null,
+      sortOption: SortOption
+    ) => {
+      if (typeof window === 'undefined') return
+      const params = new URLSearchParams()
+      if (newQuery.trim()) params.set('q', newQuery.trim())
+      if (tags.length > 0) params.set('tag', tags.join(','))
+      if (year) params.set('year', String(year))
+      if (progId) params.set('program', progId)
+      const defaultSort = newQuery.trim() ? 'relevance' : 'newest'
+      if (sortOption && sortOption !== defaultSort) {
+        params.set('sort', sortOption)
+      }
 
-    const newUrl = params.toString() ? `/search?${params.toString()}` : '/search'
-    window.history.replaceState(null, '', newUrl)
-  }, [])
+      const newUrl = params.toString() ? `/search?${params.toString()}` : '/search'
+      window.history.replaceState(null, '', newUrl)
+    },
+    []
+  )
 
   // Sync state to URL bar
   useEffect(() => {
-    updateUrlParams(query, selectedTagNames, selectedYear, selectedProgramId)
-  }, [query, selectedTagNames, selectedYear, selectedProgramId, updateUrlParams])
+    updateUrlParams(query, selectedTagNames, selectedYear, selectedProgramId, selectedSort)
+  }, [query, selectedTagNames, selectedYear, selectedProgramId, selectedSort, updateUrlParams])
 
   // Distinct available years from dataset
   const availableYears = useMemo(() => {
@@ -220,20 +273,35 @@ export default function SearchInterfaceClient({
   }, [initialTheses, availableTags])
 
   // Sorted tags: ONLY show tags that actually have at least 1 verified thesis!
-  // Ordered by frequency (highest count first), then alphabetically
+  // Ordered by frequency (highest count first) or alphabetically based on tagSortMode
   const sortedTags = useMemo(() => {
-    return cleanAvailableTags
-      .filter(t => (tagCounts.get(t.name.toLowerCase()) ?? 0) > 0)
-      .sort((a, b) => {
-        const countA = tagCounts.get(a.name.toLowerCase()) ?? 0
-        const countB = tagCounts.get(b.name.toLowerCase()) ?? 0
-        if (countB !== countA) return countB - countA
-        return a.name.localeCompare(b.name)
-      })
-  }, [cleanAvailableTags, tagCounts])
+    const list = cleanAvailableTags.filter(
+      t => (tagCounts.get(t.name.toLowerCase()) ?? 0) > 0
+    )
 
-  // Visible tags slice
-  const displayedTags = showAllTags ? sortedTags : sortedTags.slice(0, 24)
+    return list.sort((a, b) => {
+      if (tagSortMode === 'alpha') {
+        return a.name.localeCompare(b.name)
+      }
+      // 'popular'
+      const countA = tagCounts.get(a.name.toLowerCase()) ?? 0
+      const countB = tagCounts.get(b.name.toLowerCase()) ?? 0
+      if (countB !== countA) return countB - countA
+      return a.name.localeCompare(b.name)
+    })
+  }, [cleanAvailableTags, tagCounts, tagSortMode])
+
+  // Filter tags by search input inside the tag filter panel
+  const filteredTags = useMemo(() => {
+    if (!tagSearchQuery.trim()) return sortedTags
+    const q = tagSearchQuery.trim().toLowerCase()
+    return sortedTags.filter(t => t.name.toLowerCase().includes(q))
+  }, [sortedTags, tagSearchQuery])
+
+  // Visible tags slice: show all if searching or if showAllTags is toggled
+  const displayedTags = showAllTags || tagSearchQuery.trim().length > 0
+    ? filteredTags
+    : filteredTags.slice(0, 28)
 
   // Toggle tag selection safely
   const handleTagToggle = useCallback((tagName: string) => {
@@ -256,6 +324,10 @@ export default function SearchInterfaceClient({
     setSelectedTagNames([])
     setSelectedYear(null)
     setSelectedProgramId(null)
+    setSelectedSort('newest')
+    setIsTagFilterOpen(false)
+    setTagSearchQuery('')
+    setTagSortMode('popular')
     if (typeof window !== 'undefined') {
       window.history.replaceState(null, '', '/search')
       window.dispatchEvent(new CustomEvent('refero:query-change', { detail: '' }))
@@ -396,21 +468,47 @@ export default function SearchInterfaceClient({
       scoredTheses.push({ thesis: t, score: relevanceScore })
     }
 
-    // 5. Automatic Sorting: By relevance when query is present, newest first otherwise
+    // 5. Sorting: Honors selectedSort
     scoredTheses.sort((a, b) => {
-      if (cleanQuery) {
-        if (b.score !== a.score) return b.score - a.score
+      if (selectedSort === 'relevance') {
+        if (cleanQuery && b.score !== a.score) return b.score - a.score
         return (b.thesis.year_submitted ?? 0) - (a.thesis.year_submitted ?? 0)
       }
+      if (selectedSort === 'newest') {
+        const dateA = a.thesis.date_added ? new Date(a.thesis.date_added).getTime() : 0
+        const dateB = b.thesis.date_added ? new Date(b.thesis.date_added).getTime() : 0
+        if (dateB !== dateA) return dateB - dateA
+        return (b.thesis.year_submitted ?? 0) - (a.thesis.year_submitted ?? 0)
+      }
+      if (selectedSort === 'oldest') {
+        const dateA = a.thesis.date_added ? new Date(a.thesis.date_added).getTime() : 0
+        const dateB = b.thesis.date_added ? new Date(b.thesis.date_added).getTime() : 0
+        if (dateA !== dateB) return dateA - dateB
+        return (a.thesis.year_submitted ?? 0) - (b.thesis.year_submitted ?? 0)
+      }
+      if (selectedSort === 'year_desc') {
+        return (b.thesis.year_submitted ?? 0) - (a.thesis.year_submitted ?? 0)
+      }
+      if (selectedSort === 'year_asc') {
+        return (a.thesis.year_submitted ?? 0) - (b.thesis.year_submitted ?? 0)
+      }
+      if (selectedSort === 'title_asc') {
+        return (a.thesis.title || '').localeCompare(b.thesis.title || '')
+      }
+      if (selectedSort === 'title_desc') {
+        return (b.thesis.title || '').localeCompare(a.thesis.title || '')
+      }
+      if (selectedSort === 'views') {
+        return (b.thesis.view_count ?? 0) - (a.thesis.view_count ?? 0)
+      }
 
-      const dateA = a.thesis.date_added ? new Date(a.thesis.date_added).getTime() : 0
-      const dateB = b.thesis.date_added ? new Date(b.thesis.date_added).getTime() : 0
-      if (dateB !== dateA) return dateB - dateA
+      // Default fallback
+      if (cleanQuery && b.score !== a.score) return b.score - a.score
       return (b.thesis.year_submitted ?? 0) - (a.thesis.year_submitted ?? 0)
     })
 
     return scoredTheses.map(item => item.thesis)
-  }, [initialTheses, query, selectedTagNames, selectedYear, selectedProgramId])
+  }, [initialTheses, query, selectedTagNames, selectedYear, selectedProgramId, selectedSort])
 
   // Pagination calculations
   const totalPages = Math.max(1, Math.ceil(filteredAndRankedTheses.length / PAGE_SIZE))
@@ -425,11 +523,13 @@ export default function SearchInterfaceClient({
     }
   }
 
+  const defaultSort = query.trim() ? 'relevance' : 'newest'
   const hasActiveFilters =
     query.trim().length > 0 ||
     selectedTagNames.length > 0 ||
     selectedYear !== null ||
-    selectedProgramId !== null
+    selectedProgramId !== null ||
+    selectedSort !== defaultSort
 
   return (
     <div className="w-full max-w-7xl page-gutter py-6 sm:py-10 space-y-6 sm:space-y-8 animate-fade-in">
@@ -440,87 +540,6 @@ export default function SearchInterfaceClient({
         <span className="current">Search Theses</span>
       </nav>
 
-
-      {/* ── Available Tags Section ───────────────────────────────────── */}
-      <div
-        className="rounded-2xl p-5 sm:p-6 shadow-sm"
-        style={{
-          backgroundColor: '#FFFFFF',
-          border: '1.5px solid #D2DDD4',
-        }}
-      >
-        <div className="flex items-center justify-between gap-4 mb-3 flex-wrap">
-          <div className="flex items-center gap-2">
-            <span className="text-base font-bold" style={{ color: '#173B28' }}>
-              🏷️ Available Tags
-            </span>
-            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
-              {sortedTags.length} tags
-            </span>
-          </div>
-
-          {selectedTagNames.length > 0 && (
-            <button
-              type="button"
-              onClick={() => setSelectedTagNames([])}
-              className="text-xs font-bold text-rose-700 hover:text-rose-900 bg-rose-50 hover:bg-rose-100 border border-rose-200 px-2.5 py-1 rounded-full transition-colors cursor-pointer"
-            >
-              Clear selected tags ({selectedTagNames.length}) ×
-            </button>
-          )}
-        </div>
-
-        <p className="text-xs text-slate-500 mb-3.5">
-          Click any tag below to filter matching research manuscripts:
-        </p>
-
-        {/* Interactive Tag Chips */}
-        <div className="flex flex-wrap gap-2 items-center">
-          {displayedTags.map(tag => {
-            const isSelected = selectedTagNames.some(t => t.toLowerCase() === tag.name.toLowerCase())
-            const count = tagCounts.get(tag.name.toLowerCase()) ?? 0
-
-            return (
-              <button
-                key={tag.id}
-                type="button"
-                onClick={() => handleTagToggle(tag.name)}
-                className={`group text-xs font-semibold px-3 py-1.5 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-sm ${
-                  isSelected
-                    ? 'bg-[#173B28] text-white ring-2 ring-emerald-700 scale-105'
-                    : 'bg-[#F3F7F4] text-[#244C33] border border-[#D2DDD4] hover:bg-emerald-100 hover:border-emerald-300'
-                }`}
-                aria-pressed={isSelected}
-              >
-                {isSelected && <span>✓</span>}
-                <span>{formatTagDisplayName(tag.name)}</span>
-                {count > 0 && (
-                  <span
-                    className={`text-[0.6875rem] px-1.5 py-0.5 rounded-full font-bold ${
-                      isSelected
-                        ? 'bg-emerald-900 text-emerald-200'
-                        : 'bg-emerald-100 text-emerald-800 group-hover:bg-emerald-200'
-                    }`}
-                  >
-                    {count}
-                  </span>
-                )}
-              </button>
-            )
-          })}
-
-          {sortedTags.length > 24 && (
-            <button
-              type="button"
-              onClick={() => setShowAllTags(!showAllTags)}
-              className="text-xs font-bold text-emerald-800 hover:text-emerald-950 underline underline-offset-4 px-2 py-1 transition-colors cursor-pointer"
-            >
-              {showAllTags ? 'Show fewer tags' : `+ ${sortedTags.length - 24} more tags`}
-            </button>
-          )}
-        </div>
-      </div>
-
       {/* ── Search Results Header & Filter Controls (Aligned in one row) ─ */}
       <div
         id="search-results-top"
@@ -528,13 +547,13 @@ export default function SearchInterfaceClient({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          marginBottom: '1rem',
+          marginBottom: '0.75rem',
           flexWrap: 'wrap',
           gap: '0.75rem',
         }}
-        className="scroll-mt-24 pt-2"
+        className="scroll-mt-24 pt-1"
       >
-        {/* Left: Smaller Section Header Badge & Result Count */}
+        {/* Left: Section Header Badge & Result Count */}
         <div className="flex items-center gap-3 flex-wrap">
           <div
             className="inline-flex items-center gap-2 bg-white rounded-xl shadow-sm"
@@ -580,9 +599,52 @@ export default function SearchInterfaceClient({
           </div>
         </div>
 
-        {/* Right: Aligned filter controls (without large shared background) */}
+        {/* Right: Aligned filter controls */}
         <div className="flex items-center flex-wrap gap-2.5">
-          {/* Program Filter Dropdown (Optional) */}
+          {/* Tags Filter Button */}
+          <button
+            type="button"
+            onClick={() => setIsTagFilterOpen(prev => !prev)}
+            aria-expanded={isTagFilterOpen}
+            aria-controls="tags-filter-panel"
+            className={`inline-flex items-center gap-2 text-xs font-semibold px-3 py-1.5 rounded-xl border transition-all cursor-pointer shadow-sm select-none ${
+              isTagFilterOpen || selectedTagNames.length > 0
+                ? 'bg-[#173B28] text-white border-[#173B28] shadow-emerald-900/15 ring-2 ring-emerald-700/20'
+                : 'bg-white text-[#173B28] border-[#C4D3C6] hover:bg-[#F3F7F4] hover:border-emerald-400'
+            }`}
+            title="Filter theses by academic tags"
+          >
+            <FilterSlidersIcon
+              className="w-3.5 h-3.5 flex-shrink-0"
+              circleFill={isTagFilterOpen || selectedTagNames.length > 0 ? '#173B28' : 'white'}
+            />
+            <span>Tags</span>
+            {selectedTagNames.length > 0 ? (
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-400 text-emerald-950 leading-none">
+                {selectedTagNames.length}
+              </span>
+            ) : (
+              <span
+                className={`text-[10px] font-medium ${
+                  isTagFilterOpen ? 'text-emerald-200' : 'text-slate-400'
+                }`}
+              >
+                ({sortedTags.length})
+              </span>
+            )}
+            <svg
+              className={`w-3.5 h-3.5 transition-transform duration-200 ${
+                isTagFilterOpen ? 'rotate-180 text-emerald-200' : 'text-emerald-800'
+              }`}
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+
+          {/* Program Filter Dropdown */}
           {programs.length > 0 && (
             <div className="flex items-center gap-1.5">
               <label htmlFor="search-program-select" className="text-xs font-bold text-emerald-900 tracking-wide uppercase">
@@ -654,6 +716,42 @@ export default function SearchInterfaceClient({
             </div>
           </div>
 
+          {/* Sort Filter Dropdown */}
+          <div className="flex items-center gap-1.5">
+            <label htmlFor="search-sort-select" className="text-xs font-bold text-emerald-900 tracking-wide uppercase">
+              Sort:
+            </label>
+            <div className="relative">
+              <select
+                id="search-sort-select"
+                value={selectedSort}
+                onChange={e => setSelectedSort(e.target.value as SortOption)}
+                className="text-xs font-semibold px-3 py-1.5 pr-8 rounded-xl cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-600 appearance-none shadow-sm"
+                style={{
+                  backgroundColor: '#FFFFFF',
+                  color: '#173B28',
+                  border: '1.5px solid #C4D3C6',
+                }}
+              >
+                {query.trim() && <option value="relevance">Most Relevant</option>}
+                <option value="newest">Newest Added</option>
+                <option value="oldest">Oldest Added</option>
+                <option value="year_desc">Year (Newest)</option>
+                <option value="year_asc">Year (Oldest)</option>
+                <option value="title_asc">Title (A → Z)</option>
+                <option value="title_desc">Title (Z → A)</option>
+              </select>
+              <svg
+                className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 text-emerald-800 pointer-events-none"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
+          </div>
+
           {/* Reset Filters button */}
           {hasActiveFilters && (
             <button
@@ -666,6 +764,214 @@ export default function SearchInterfaceClient({
           )}
         </div>
       </div>
+
+      {/* ── Active Tag Filter Bar ──────────────────────────────────── */}
+      {selectedTagNames.length > 0 && (
+        <div
+          className="flex items-center justify-between flex-wrap gap-3 px-4 py-2.5 sm:px-5 sm:py-3 rounded-2xl shadow-xs border animate-fade-in"
+          style={{
+            backgroundColor: '#FFFFFF',
+            borderColor: '#D2DDD4',
+          }}
+        >
+          <div className="flex items-center flex-wrap gap-2">
+            <div className="flex items-center gap-1.5 mr-1 text-[#173B28]">
+              <span className="text-xs">🏷️</span>
+              <span className="text-xs font-bold tracking-wide uppercase">
+                Active Tags:
+              </span>
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
+                {selectedTagNames.length}
+              </span>
+            </div>
+
+            {selectedTagNames.map(tagName => (
+              <button
+                key={tagName}
+                type="button"
+                onClick={() => handleTagToggle(tagName)}
+                className="inline-flex items-center gap-2 text-xs font-semibold px-3 py-1.5 rounded-xl bg-[#F3F7F4] text-[#173B28] border border-[#C4D3C6] hover:bg-rose-50 hover:text-rose-800 hover:border-rose-300 transition-all group cursor-pointer shadow-2xs"
+                title={`Remove ${tagName} filter`}
+              >
+                <span>{formatTagDisplayName(tagName)}</span>
+                <span className="w-4 h-4 rounded-full bg-emerald-100 text-emerald-800 group-hover:bg-rose-200 group-hover:text-rose-800 flex items-center justify-center font-bold text-[11px] leading-none transition-colors">
+                  ×
+                </span>
+              </button>
+            ))}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setSelectedTagNames([])}
+            className="text-xs font-bold text-rose-700 hover:text-rose-900 bg-rose-50 hover:bg-rose-100 border border-rose-200 px-3 py-1.5 rounded-xl transition-colors cursor-pointer ml-auto sm:ml-0"
+          >
+            Clear all tags ×
+          </button>
+        </div>
+      )}
+
+      {/* ── Expandable Academic Tags Filter Panel ─────────────────────── */}
+      {isTagFilterOpen && (
+        <div
+          id="tags-filter-panel"
+          className="bg-white rounded-2xl p-5 sm:p-6 shadow-sm border animate-scale-in space-y-4"
+          style={{
+            borderColor: '#C4D3C6',
+          }}
+        >
+          {/* Header Row */}
+          <div className="flex items-center justify-between gap-3 flex-wrap pb-3 border-b border-slate-100">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-800 flex items-center justify-center border border-emerald-200">
+                <FilterSlidersIcon className="w-4 h-4" circleFill="#ECFDF5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-bold text-[#173B28]">
+                    Filter by Academic Tags
+                  </h3>
+                  <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
+                    {filteredTags.length} {filteredTags.length === 1 ? 'tag' : 'tags'}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-500">
+                  Select tags below to narrow down your thesis search
+                </p>
+              </div>
+            </div>
+
+            {/* Tag Sorting buttons & Actions */}
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Tag Sort Mode Toggle */}
+              <div className="inline-flex items-center bg-[#F3F7F4] p-0.5 rounded-xl border border-[#D2DDD4]">
+                <button
+                  type="button"
+                  onClick={() => setTagSortMode('popular')}
+                  className={`text-[11px] font-bold px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+                    tagSortMode === 'popular'
+                      ? 'bg-[#173B28] text-white shadow-xs'
+                      : 'text-slate-600 hover:text-emerald-900'
+                  }`}
+                  title="Sort tags by number of verified theses"
+                >
+                  🔥 Most Popular
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTagSortMode('alpha')}
+                  className={`text-[11px] font-bold px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+                    tagSortMode === 'alpha'
+                      ? 'bg-[#173B28] text-white shadow-xs'
+                      : 'text-slate-600 hover:text-emerald-900'
+                  }`}
+                  title="Sort tags alphabetically A to Z"
+                >
+                  🔤 A – Z
+                </button>
+              </div>
+
+              {selectedTagNames.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedTagNames([])}
+                  className="text-xs font-bold text-rose-700 hover:text-rose-900 bg-rose-50 hover:bg-rose-100 border border-rose-200 px-3 py-1 rounded-xl transition-colors cursor-pointer"
+                >
+                  Clear ({selectedTagNames.length}) ×
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setIsTagFilterOpen(false)}
+                className="text-xs font-bold text-emerald-800 hover:text-emerald-950 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-3 py-1 rounded-xl transition-colors cursor-pointer"
+              >
+                Done ✓
+              </button>
+            </div>
+          </div>
+
+          {/* Tag Search Input */}
+          <div className="relative max-w-md">
+            <input
+              type="text"
+              value={tagSearchQuery}
+              onChange={e => setTagSearchQuery(e.target.value)}
+              placeholder="Search tags (e.g. AI, Climate, Genomics)..."
+              className="w-full text-xs font-medium pl-8 pr-8 py-2 rounded-xl bg-[#F8FAF9] border border-[#C4D3C6] focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-600 transition-all placeholder:text-slate-400"
+            />
+            <svg
+              className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            {tagSearchQuery && (
+              <button
+                type="button"
+                onClick={() => setTagSearchQuery('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs font-bold cursor-pointer"
+              >
+                ×
+              </button>
+            )}
+          </div>
+
+          {/* Interactive Tag Chips */}
+          <div className="flex flex-wrap gap-2 items-center max-h-72 overflow-y-auto pr-1">
+            {displayedTags.map(tag => {
+              const isSelected = selectedTagNames.some(t => t.toLowerCase() === tag.name.toLowerCase())
+              const count = tagCounts.get(tag.name.toLowerCase()) ?? 0
+
+              return (
+                <button
+                  key={tag.id}
+                  type="button"
+                  onClick={() => handleTagToggle(tag.name)}
+                  className={`group text-xs font-semibold px-3 py-1.5 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-xs ${
+                    isSelected
+                      ? 'bg-[#173B28] text-white ring-2 ring-emerald-700 scale-105'
+                      : 'bg-[#F3F7F4] text-[#244C33] border border-[#D2DDD4] hover:bg-emerald-100 hover:border-emerald-300'
+                  }`}
+                  aria-pressed={isSelected}
+                >
+                  {isSelected && <span>✓</span>}
+                  <span>{formatTagDisplayName(tag.name)}</span>
+                  {count > 0 && (
+                    <span
+                      className={`text-[0.6875rem] px-1.5 py-0.5 rounded-full font-bold ${
+                        isSelected
+                          ? 'bg-emerald-900 text-emerald-200'
+                          : 'bg-emerald-100 text-emerald-800 group-hover:bg-emerald-200'
+                      }`}
+                    >
+                      {count}
+                    </span>
+                  )}
+                </button>
+              )
+            })}
+
+            {filteredTags.length === 0 && (
+              <div className="py-4 text-center w-full text-xs text-slate-400">
+                No tags found matching &ldquo;{tagSearchQuery}&rdquo;
+              </div>
+            )}
+
+            {filteredTags.length > 28 && !tagSearchQuery.trim() && (
+              <button
+                type="button"
+                onClick={() => setShowAllTags(!showAllTags)}
+                className="text-xs font-bold text-emerald-800 hover:text-emerald-950 underline underline-offset-4 px-2 py-1 transition-colors cursor-pointer"
+              >
+                {showAllTags ? 'Show fewer tags' : `+ ${filteredTags.length - 28} more tags`}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ── Theses Grid (3x3 / 9 per page) ──────────────────────────── */}
       {paginatedTheses.length > 0 ? (
