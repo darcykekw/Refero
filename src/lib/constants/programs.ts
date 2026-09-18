@@ -54,9 +54,21 @@ export const DEFAULT_PROGRAMS: Program[] = [
   },
 ]
 
+export const PRESET_PROGRAM_LOGOS = [
+  { name: 'Biology (YBA)', file: 'YBA-LOGO.png', path: '/images/YBA-LOGO.png' },
+  { name: 'Marine Biology (MBS)', file: 'MBS-LOGO.png', path: '/images/MBS-LOGO.png' },
+  { name: 'Computer Science (ACS)', file: 'ACS-LOGO.png', path: '/images/ACS-LOGO.png' },
+  { name: 'Environmental Science (ESSA)', file: 'ESSA-LOGO.png', path: '/images/ESSA-LOGO.png' },
+  { name: 'Information Technology (SITE)', file: 'SITE-LOGO.png', path: '/images/SITE-LOGO.png' },
+  { name: 'Refero Crest', file: 'Refero.png', path: '/images/Refero.png' },
+]
+
 export function getProgramLogoUrl(logo?: string | null, progName?: string | null): string {
   if (logo && logo.trim()) {
-    return logo.startsWith('/') || logo.startsWith('http') ? logo : `/images/${logo}`
+    const trimmed = logo.trim()
+    return trimmed.startsWith('/') || trimmed.startsWith('http') || trimmed.startsWith('data:')
+      ? trimmed
+      : `/images/${trimmed}`
   }
   const name = (progName || '').toLowerCase()
   if (name.includes('marine')) return '/images/MBS-LOGO.png'

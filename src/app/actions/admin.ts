@@ -422,3 +422,212 @@ export async function deleteTagAdmin(tagId: string) {
   revalidatePath('/admin/settings')
   return { success: true }
 }
+
+// ── Program Management ────────────────────────────────────────────────────────
+
+function revalidateProgramPaths() {
+  revalidatePath('/admin/programs')
+  revalidatePath('/admin/theses')
+  revalidatePath('/admin/feed')
+  revalidatePath('/admin/settings')
+  revalidatePath('/')
+  revalidatePath('/search')
+  revalidatePath('/theses/upload')
+  revalidatePath('/theses')
+}
+
+export async function addProgramAdmin(formData: FormData) {
+  await requireAdmin()
+  const adminClient = createAdminClient()
+
+  const progName = (formData.get('prog_name') as string)?.trim()
+  if (!progName) {
+    return { success: false, error: 'Program name is required.' }
+  }
+
+  // Determine college_id (default to existing college, e.g. College of Sciences)
+  let collegeId = (formData.get('college_id') as string)?.trim()
+  if (!collegeId) {
+    const { data: col } = await adminClient.from('colleges').select('id').limit(1).maybeSingle()
+    collegeId = col?.id || 'c011e9e0-0000-0000-0000-000000000001'
+  }
+
+  let finalLogo = (formData.get('logo_preset') as string)?.trim() || 'Refero.png'
+  const logoFile = formData.get('logo_file') as File | null
+
+  if (logoFile && logoFile.size > 0) {
+    const cleanFileName = logoFile.name.replace(/[^a-zA-Z0-9._-]/g, '_')
+    const path = `logos/${Date.now()}_${cleanFileName}`
+
+    // Attempt upload to program-logos or thesis-pdfs bucket
+    let { error: uploadError } = await adminClient.storage
+      .from('program-logos')
+      .upload(path, logoFile, {
+        contentType: logoFile.type || 'image/png',
+        upsert: true,
+      })
+
+    if (uploadError) {
+      const fallbackUpload = await adminClient.storage
+        .from('thesis-pdfs')
+        .upload(`program_logos/${Date.now()}_${cleanFileName}`, logoFile, {
+          contentType: logoFile.type || 'image/png',
+          upsert: true,
+        })
+      if (!fallbackUpload.error) {
+        const { data: pubUrl } = adminClient.storage
+          .from('thesis-pdfs')
+          .getPublicUrl(`program_logos/${Date.now()}_${cleanFileName}`)
+        finalLogo = pubUrl.publicUrl
+      }
+    } else {
+      const { data: pubUrl } = adminClient.storage
+        .from('program-logos')
+        .getPublicUrl(path)
+      finalLogo = pubUrl.publicUrl
+    }
+  }
+
+  const { data, error } = await adminClient
+    .from('programs')
+    .insert({
+      prog_name: progName,
+      college_id: collegeId,
+      logo: finalLogo,
+    })
+    .select()
+    .single()
+
+  if (error) {
+    return { success: false, error: error.message }
+  }
+
+  await logAudit('ADD_PROGRAM', 'program', data.id, {
+    prog_name: progName,
+    logo: finalLogo,
+  })
+
+  revalidateProgramPaths()
+  return { success: true, program: data }
+}
+
+export async function updateProgramAdmin(formData: FormData) {
+  await requireAdmin()
+  const adminClient = createAdminClient()
+
+  const id = (formData.get('id') as string)?.trim()
+  if (!id) {
+    return { success: false, error: 'Program ID is required.' }
+  }
+
+  const progName = (formData.get('prog_name') as string)?.trim()
+  if (!progName) {
+    return { success: false, error: 'Program name cannot be empty.' }
+  }
+
+  const logoPreset = (formData.get('logo_preset') as string)?.trim()
+  const logoFile = formData.get('logo_file') as File | null
+  let finalLogo = logoPreset || undefined
+
+  if (logoFile && logoFile.size > 0) {
+    const cleanFileName = logoFile.name.replace(/[^a-zA-Z0-9._-]/g, '_')
+    const path = `logos/${Date.now()}_${cleanFileName}`
+
+    let { error: uploadError } = await adminClient.storage
+      .from('program-logos')
+      .upload(path, logoFile, {
+        contentType: logoFile.type || 'image/png',
+        upsert: true,
+      })
+
+    if (uploadError) {
+      const fallbackUpload = await adminClient.storage
+        .from('thesis-pdfs')
+        .upload(`program_logos/${Date.now()}_${cleanFileName}`, logoFile, {
+          contentType: logoFile.type || 'image/png',
+          upsert: true,
+        })
+      if (!fallbackUpload.error) {
+        const { data: pubUrl } = adminClient.storage
+          .from('thesis-pdfs')
+          .getPublicUrl(`program_logos/${Date.now()}_${cleanFileName}`)
+        finalLogo = pubUrl.publicUrl
+      }
+    } else {
+      const { data: pubUrl } = adminClient.storage
+        .from('program-logos')
+        .getPublicUrl(path)
+      finalLogo = pubUrl.publicUrl
+    }
+  }
+
+  const updatePayload: {
+    prog_name: string
+    date_modified: string
+    logo?: string
+  } = {
+    prog_name: progName,
+    date_modified: new Date().toISOString(),
+    ...(finalLogo ? { logo: finalLogo } : {}),
+  }
+
+  const { data, error } = await adminClient
+    .from('programs')
+    .update(updatePayload)
+    .eq('id', id)
+    .select()
+    .single()
+
+  if (error) {
+    return { success: false, error: error.message }
+  }
+
+  await logAudit('UPDATE_PROGRAM', 'program', id, {
+    prog_name: progName,
+    ...(finalLogo && { logo: finalLogo }),
+  })
+
+  revalidateProgramPaths()
+  return { success: true, program: data }
+}
+
+export async function deleteProgramAdmin(programId: string) {
+  await requireAdmin()
+  const adminClient = createAdminClient()
+
+  // 1. Safety check: Count active theses linked to this program
+  const { count, error: countErr } = await adminClient
+    .from('theses')
+    .select('id', { count: 'exact', head: true })
+    .eq('program_id', programId)
+
+  if (count && count > 0) {
+    return {
+      success: false,
+      error: `Cannot delete program: ${count} thesis manuscript${count > 1 ? 's are' : ' is'} linked to this program. Please reassign or delete these theses first.`,
+    }
+  }
+
+  const { data: prog } = await adminClient
+    .from('programs')
+    .select('prog_name')
+    .eq('id', programId)
+    .single()
+
+  const { error } = await adminClient
+    .from('programs')
+    .delete()
+    .eq('id', programId)
+
+  if (error) {
+    return { success: false, error: error.message }
+  }
+
+  await logAudit('DELETE_PROGRAM', 'program', programId, {
+    prog_name: prog?.prog_name ?? '',
+  })
+
+  revalidateProgramPaths()
+  return { success: true }
+}
+

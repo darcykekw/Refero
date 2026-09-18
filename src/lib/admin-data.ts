@@ -300,3 +300,59 @@ function formatThesisRows(rows: any[]): AdminThesisItem[] {
     tags: (row.tags || []).map((t: any) => t.tag).filter(Boolean),
   }))
 }
+
+export interface AdminProgramItem extends Program {
+  theses_count: number
+  verified_theses_count: number
+  college_name?: string
+}
+
+export async function getAllProgramsWithStats(): Promise<AdminProgramItem[]> {
+  const adminClient = createAdminClient()
+
+  let programs: any[] = []
+  try {
+    const { data, error } = await adminClient
+      .from('programs')
+      .select('*, colleges(college_name)')
+      .order('prog_name')
+
+    if (!error && data && data.length > 0) {
+      programs = data
+    }
+  } catch (err) {
+    console.warn('getAllProgramsWithStats query failed:', err)
+  }
+
+  if (programs.length === 0) {
+    programs = DEFAULT_PROGRAMS.map(p => ({
+      ...p,
+      colleges: { college_name: 'College of Sciences' },
+    }))
+  }
+
+  // Count theses for each program
+  let theses: { program_id: string | null; status?: string | null }[] = []
+  try {
+    const { data } = await adminClient
+      .from('theses')
+      .select('program_id, status')
+    theses = data ?? []
+  } catch {}
+
+  return programs.map(p => {
+    const pTheses = theses.filter(t => t.program_id === p.id)
+    return {
+      id: p.id,
+      prog_name: p.prog_name,
+      college_id: p.college_id,
+      logo: p.logo,
+      date_added: p.date_added,
+      date_modified: p.date_modified,
+      college_name: p.colleges?.college_name || 'College of Sciences',
+      theses_count: pTheses.length,
+      verified_theses_count: pTheses.filter(t => t.status === 'verified' || !t.status).length,
+    }
+  })
+}
+

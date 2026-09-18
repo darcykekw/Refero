@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { getAllTagsWithUsage, getAuditLogsList } from '@/lib/admin-data'
 import TagManager from '@/components/admin/TagManager'
 
@@ -26,6 +27,12 @@ export default async function AdminSettingsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Link
+            href="/admin/programs"
+            className="px-3.5 py-2 rounded-xl bg-white border border-slate-200/80 hover:bg-emerald-50 hover:border-emerald-200 text-emerald-900 text-xs font-semibold shadow-xs transition-colors inline-flex items-center gap-1.5"
+          >
+            <span>Manage Academic Programs →</span>
+          </Link>
           <span className="px-3.5 py-2 rounded-xl bg-white border border-slate-200/80 text-slate-700 text-xs font-semibold shadow-xs">
             Active Tags: <strong className="text-emerald-900">{tags.length}</strong>
           </span>
