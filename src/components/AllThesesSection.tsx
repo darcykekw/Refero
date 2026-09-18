@@ -1,9 +1,12 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import type { Program, ThesisWithRelations } from '@/types/database'
 import ThesisCard from '@/components/ThesisCard'
+import { ThesisGridSkeleton } from '@/components/ThesisCardSkeleton'
+
+type SortOption = 'newest' | 'oldest' | 'year_desc' | 'year_asc' | 'title_asc' | 'title_desc'
 
 interface AllThesesSectionProps {
   initialTheses: ThesisWithRelations[]
@@ -26,8 +29,27 @@ export default function AllThesesSection({
 
   const [selectedProgramId, setSelectedProgramId] = useState<string | null>(urlProgram)
   const [selectedYear, setSelectedYear] = useState<number | null>(urlYear ? Number(urlYear) : null)
+  const [selectedSort, setSelectedSort] = useState<SortOption>('newest')
+  const [isSorting, setIsSorting] = useState<boolean>(false)
+  const sortTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const [searchFilter, setSearchFilter] = useState<string>(urlQuery)
   const [currentPage, setCurrentPage] = useState<number>(1)
+
+  const handleSortChange = (newSort: SortOption) => {
+    if (newSort === selectedSort) return
+    setIsSorting(true)
+    setSelectedSort(newSort)
+    if (sortTimeoutRef.current) clearTimeout(sortTimeoutRef.current)
+    sortTimeoutRef.current = setTimeout(() => {
+      setIsSorting(false)
+    }, 450)
+  }
+
+  useEffect(() => {
+    return () => {
+      if (sortTimeoutRef.current) clearTimeout(sortTimeoutRef.current)
+    }
+  }, [])
 
   // Sync with searchParams when user navigates or uses the Program Carousel
   useEffect(() => {
@@ -84,8 +106,37 @@ export default function AllThesesSection({
       )
     }
 
+    // Sort list
+    list = [...list].sort((a, b) => {
+      if (selectedSort === 'newest') {
+        const dateA = a.date_added ? new Date(a.date_added).getTime() : 0
+        const dateB = b.date_added ? new Date(b.date_added).getTime() : 0
+        if (dateB !== dateA) return dateB - dateA
+        return (b.year_submitted ?? 0) - (a.year_submitted ?? 0)
+      }
+      if (selectedSort === 'oldest') {
+        const dateA = a.date_added ? new Date(a.date_added).getTime() : 0
+        const dateB = b.date_added ? new Date(b.date_added).getTime() : 0
+        if (dateA !== dateB) return dateA - dateB
+        return (a.year_submitted ?? 0) - (b.year_submitted ?? 0)
+      }
+      if (selectedSort === 'year_desc') {
+        return (b.year_submitted ?? 0) - (a.year_submitted ?? 0)
+      }
+      if (selectedSort === 'year_asc') {
+        return (a.year_submitted ?? 0) - (b.year_submitted ?? 0)
+      }
+      if (selectedSort === 'title_asc') {
+        return (a.title || '').localeCompare(b.title || '')
+      }
+      if (selectedSort === 'title_desc') {
+        return (b.title || '').localeCompare(a.title || '')
+      }
+      return 0
+    })
+
     return list
-  }, [initialTheses, selectedProgramId, selectedYear, searchFilter])
+  }, [initialTheses, selectedProgramId, selectedYear, searchFilter, selectedSort])
 
   const totalPages = Math.max(1, Math.ceil(filteredTheses.length / PAGE_SIZE))
   const startIndex = (currentPage - 1) * PAGE_SIZE
@@ -165,6 +216,43 @@ export default function AllThesesSection({
             </div>
           </div>
 
+          {/* Sort Filter Dropdown */}
+          <div className="flex items-center gap-1.5">
+            <label htmlFor="all-theses-sort" className="text-xs font-bold text-emerald-900 tracking-wide uppercase flex items-center gap-1.5">
+              <span>Sort:</span>
+              {isSorting && <span className="spinner text-emerald-700" style={{ width: '0.75rem', height: '0.75rem' }} />}
+            </label>
+            <div className="relative">
+              <select
+                id="all-theses-sort"
+                value={selectedSort}
+                onChange={e => handleSortChange(e.target.value as SortOption)}
+                disabled={isSorting}
+                className="text-xs font-semibold px-3 py-1.5 pr-8 rounded-xl cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-600 appearance-none shadow-sm transition-opacity disabled:opacity-80"
+                style={{
+                  backgroundColor: '#FFFFFF',
+                  color: '#173B28',
+                  border: '1.5px solid #C4D3C6',
+                }}
+              >
+                <option value="newest">Newest Added</option>
+                <option value="oldest">Oldest Added</option>
+                <option value="year_desc">Year (Newest)</option>
+                <option value="year_asc">Year (Oldest)</option>
+                <option value="title_asc">Title (A → Z)</option>
+                <option value="title_desc">Title (Z → A)</option>
+              </select>
+              <svg
+                className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 text-emerald-800 pointer-events-none"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
+          </div>
+
           {/* Action reset if program, year, or search query is active */}
           {(selectedProgramId || selectedYear || searchFilter.trim()) && (
             <div className="flex items-center gap-2">
@@ -190,8 +278,10 @@ export default function AllThesesSection({
         </div>
       </div>
 
-      {/* ── 3x2 Theses Grid (6 per page) ───────────────────────── */}
-      {paginatedTheses.length > 0 ? (
+      {/* ── 3x3 Theses Grid (9 per page) ───────────────────────── */}
+      {isSorting ? (
+        <ThesisGridSkeleton count={Math.min(PAGE_SIZE, Math.max(paginatedTheses.length, 6))} />
+      ) : paginatedTheses.length > 0 ? (
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {paginatedTheses.map(thesis => (
             <ThesisCard

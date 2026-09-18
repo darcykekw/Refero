@@ -1,10 +1,13 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import type { ThesisWithRelations } from '@/types/database'
 import ThesisCard from '@/components/ThesisCard'
+import { ThesisGridSkeleton } from '@/components/ThesisCardSkeleton'
+
+type SortOption = 'newest' | 'oldest' | 'title_asc' | 'year_desc'
 
 interface ThesesGridClientProps {
   initialUserTheses: ThesisWithRelations[]
@@ -22,6 +25,25 @@ export default function ThesesGridClient({
   const [showUploadToast, setShowUploadToast] = useState(isUploaded)
   const [localUploads, setLocalUploads] = useState<ThesisWithRelations[]>([])
   const [filterQuery, setFilterQuery] = useState('')
+  const [selectedSort, setSelectedSort] = useState<SortOption>('newest')
+  const [isSorting, setIsSorting] = useState<boolean>(false)
+  const sortTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+
+  const handleSortChange = (newSort: SortOption) => {
+    if (newSort === selectedSort) return
+    setIsSorting(true)
+    setSelectedSort(newSort)
+    if (sortTimeoutRef.current) clearTimeout(sortTimeoutRef.current)
+    sortTimeoutRef.current = setTimeout(() => {
+      setIsSorting(false)
+    }, 450)
+  }
+
+  useEffect(() => {
+    return () => {
+      if (sortTimeoutRef.current) clearTimeout(sortTimeoutRef.current)
+    }
+  }, [])
 
   useEffect(() => {
     try {
@@ -56,15 +78,42 @@ export default function ThesesGridClient({
   }, [localUploads, initialUserTheses])
 
   const filteredTheses = useMemo(() => {
-    if (!filterQuery.trim()) return allUserTheses
-    const q = filterQuery.trim().toLowerCase()
-    return allUserTheses.filter(t =>
-      t.title.toLowerCase().includes(q) ||
-      t.authors.toLowerCase().includes(q) ||
-      t.abstract.toLowerCase().includes(q) ||
-      (t.tags && t.tags.some(tag => tag.name.toLowerCase().includes(q)))
-    )
-  }, [allUserTheses, filterQuery])
+    let list = allUserTheses
+    if (filterQuery.trim()) {
+      const q = filterQuery.trim().toLowerCase()
+      list = list.filter(t =>
+        t.title.toLowerCase().includes(q) ||
+        t.authors.toLowerCase().includes(q) ||
+        t.abstract.toLowerCase().includes(q) ||
+        (t.tags && t.tags.some(tag => tag.name.toLowerCase().includes(q)))
+      )
+    }
+
+    // Apply sorting
+    list = [...list].sort((a, b) => {
+      if (selectedSort === 'newest') {
+        const dateA = a.date_added ? new Date(a.date_added).getTime() : 0
+        const dateB = b.date_added ? new Date(b.date_added).getTime() : 0
+        if (dateB !== dateA) return dateB - dateA
+        return (b.year_submitted ?? 0) - (a.year_submitted ?? 0)
+      }
+      if (selectedSort === 'oldest') {
+        const dateA = a.date_added ? new Date(a.date_added).getTime() : 0
+        const dateB = b.date_added ? new Date(b.date_added).getTime() : 0
+        if (dateA !== dateB) return dateA - dateB
+        return (a.year_submitted ?? 0) - (b.year_submitted ?? 0)
+      }
+      if (selectedSort === 'year_desc') {
+        return (b.year_submitted ?? 0) - (a.year_submitted ?? 0)
+      }
+      if (selectedSort === 'title_asc') {
+        return (a.title || '').localeCompare(b.title || '')
+      }
+      return 0
+    })
+
+    return list
+  }, [allUserTheses, filterQuery, selectedSort])
 
   if (!userSignedIn) {
     return (
@@ -150,6 +199,36 @@ export default function ThesesGridClient({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
           </div>
+
+          {/* Sort Select */}
+          <div className="relative">
+            <select
+              value={selectedSort}
+              onChange={e => handleSortChange(e.target.value as SortOption)}
+              disabled={isSorting}
+              className="text-xs font-semibold px-2.5 py-1.5 pr-7 rounded-lg cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-600 appearance-none shadow-xs disabled:opacity-80"
+              style={{
+                backgroundColor: '#F3F6F3',
+                color: '#173B28',
+                border: '1px solid #C4D3C6',
+              }}
+              title="Sort your theses"
+            >
+              <option value="newest">Newest</option>
+              <option value="oldest">Oldest</option>
+              <option value="year_desc">Year</option>
+              <option value="title_asc">Title (A-Z)</option>
+            </select>
+            <svg
+              className="w-3 h-3 absolute right-2 top-1/2 -translate-y-1/2 text-emerald-800 pointer-events-none"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+            </svg>
+          </div>
+
           <Link href="/theses/upload" className="btn btn-primary btn-sm whitespace-nowrap">
             + Upload Thesis
           </Link>
@@ -157,7 +236,9 @@ export default function ThesesGridClient({
       </div>
 
       {/* ── My Theses Grid ────────────────────────────────────────── */}
-      {filteredTheses.length > 0 ? (
+      {isSorting ? (
+        <ThesisGridSkeleton count={Math.min(6, Math.max(filteredTheses.length, 3))} />
+      ) : filteredTheses.length > 0 ? (
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {filteredTheses.map(thesis => (
             <ThesisCard

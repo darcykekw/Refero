@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import type { Program, Tag, ThesisWithRelations } from '@/types/database'
 import ThesisCard from '@/components/ThesisCard'
+import { ThesisGridSkeleton } from '@/components/ThesisCardSkeleton'
 
 interface SearchInterfaceClientProps {
   initialTheses: ThesisWithRelations[]
@@ -110,6 +111,24 @@ export default function SearchInterfaceClient({
   const [selectedSort, setSelectedSort] = useState<SortOption>(
     (initialSort as SortOption) || (initialQuery ? 'relevance' : 'newest')
   )
+  const [isSorting, setIsSorting] = useState<boolean>(false)
+  const sortTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+
+  const handleSortChange = useCallback((newSort: SortOption) => {
+    if (newSort === selectedSort) return
+    setIsSorting(true)
+    setSelectedSort(newSort)
+    if (sortTimeoutRef.current) clearTimeout(sortTimeoutRef.current)
+    sortTimeoutRef.current = setTimeout(() => {
+      setIsSorting(false)
+    }, 450)
+  }, [selectedSort])
+
+  useEffect(() => {
+    return () => {
+      if (sortTimeoutRef.current) clearTimeout(sortTimeoutRef.current)
+    }
+  }, [])
   const [currentPage, setCurrentPage] = useState<number>(1)
   const [showAllTags, setShowAllTags] = useState<boolean>(false)
 
@@ -718,15 +737,17 @@ export default function SearchInterfaceClient({
 
           {/* Sort Filter Dropdown */}
           <div className="flex items-center gap-1.5">
-            <label htmlFor="search-sort-select" className="text-xs font-bold text-emerald-900 tracking-wide uppercase">
-              Sort:
+            <label htmlFor="search-sort-select" className="text-xs font-bold text-emerald-900 tracking-wide uppercase flex items-center gap-1.5">
+              <span>Sort:</span>
+              {isSorting && <span className="spinner text-emerald-700" style={{ width: '0.75rem', height: '0.75rem' }} />}
             </label>
             <div className="relative">
               <select
                 id="search-sort-select"
                 value={selectedSort}
-                onChange={e => setSelectedSort(e.target.value as SortOption)}
-                className="text-xs font-semibold px-3 py-1.5 pr-8 rounded-xl cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-600 appearance-none shadow-sm"
+                onChange={e => handleSortChange(e.target.value as SortOption)}
+                disabled={isSorting}
+                className="text-xs font-semibold px-3 py-1.5 pr-8 rounded-xl cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-600 appearance-none shadow-sm transition-opacity disabled:opacity-80"
                 style={{
                   backgroundColor: '#FFFFFF',
                   color: '#173B28',
@@ -974,7 +995,9 @@ export default function SearchInterfaceClient({
       )}
 
       {/* ── Theses Grid (3x3 / 9 per page) ──────────────────────────── */}
-      {paginatedTheses.length > 0 ? (
+      {isSorting ? (
+        <ThesisGridSkeleton count={Math.min(PAGE_SIZE, Math.max(paginatedTheses.length, 6))} />
+      ) : paginatedTheses.length > 0 ? (
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {paginatedTheses.map(thesis => (
             <ThesisCard
